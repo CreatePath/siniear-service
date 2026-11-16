@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.router import router
 from app.core.config import get_settings
+from app.core.errors import install_error_handlers
 
 
 @asynccontextmanager
@@ -21,3 +22,4 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(router)
+install_error_handlers(app)

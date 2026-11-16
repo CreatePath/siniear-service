@@ -15,6 +15,8 @@ RUN useradd --uid 10001 --create-home app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev
 COPY app ./app
+COPY alembic.ini ./
+COPY migrations ./migrations
 USER app
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -23,6 +25,7 @@ FROM base AS development
 USER root
 RUN uv sync --locked
 COPY tests ./tests
+COPY scripts ./scripts
 USER app
 
 FROM base AS runtime
