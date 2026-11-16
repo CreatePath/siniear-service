@@ -1,0 +1,78 @@
+name: siniear
+
+x-app-environment: &app-environment
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_NAME: ${DB_NAME:-siniear}
+  DB_USER: ${DB_USER:-siniear}
+  DB_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+  WATCHFILES_FORCE_POLLING: "true"
+
+x-app-healthcheck: &app-healthcheck
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=7)"]
+  interval: 15s
+  timeout: 8s
+  retries: 3
+  start_period: 20s
+
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${DB_NAME:-siniear}
+      POSTGRES_USER: ${DB_USER:-siniear}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: local
+
+  service:
+    build:
+      context: .
+      target: development
+    environment: *app-environment
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
+    ports:
+      - "127.0.0.1:${SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck: *app-healthcheck
+    init: true
+    logging:
+      driver: local
+
+  call:
+    build:
+      context: ../siniear-call
+      target: development
+    environment: *app-environment
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
+    ports:
+      - "127.0.0.1:${CALL_PORT:-8001}:8000"
+    volumes:
+      - ../siniear-call/app:/app/app
+      - ../siniear-call/tests:/app/tests
+      - ../siniear-call/pyproject.toml:/app/pyproject.toml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck: *app-healthcheck
+    init: true
+    logging:
+      driver: local
+
+volumes:
+  postgres-data:
