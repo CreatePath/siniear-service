@@ -1,4 +1,4 @@
-from app.db.models.community import Group, Meeting
+from app.db.models.community import Comment, Group, Meeting, Post
 from app.db.models.identity import IdentityVerification, Senior, User
 from app.db.models.registration import (
     CancellationNotice,
@@ -8,6 +8,8 @@ from app.db.models.registration import (
 )
 
 __all__ = [
+    "Post",
+    "Comment",
     "Group",
     "Meeting",
     "IdentityVerification",

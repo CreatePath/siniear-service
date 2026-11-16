@@ -1,7 +1,7 @@
 # 신이어 서비스 서버
 
 C는 회원·모임·일정·참가 신청·정책을, T(`siniear-call`)는 통화 실행·원문·요약·검색을 담당한다.
-현재 상태 확인 API와 **Group/Meeting 앱 API C01–C14**, 개발용 인증 경계, 합성 계정 seed,
+현재 상태 확인 API와 **Group/Meeting 앱 API C01–C14·커뮤니티 API D01–D09**, 개발용 인증 경계, 합성 계정 seed,
 SQLAlchemy 모델·Alembic 마이그레이션을 구현했다. 실제 로그인·실명 인증·통화 도구·알림 발송은 후속 작업이다.
 
 ## 작업 기록과 커밋
@@ -85,6 +85,10 @@ owner는 전역 관리자가 아니다. 인증된 회원 누구나 개설하며 
 | 참가 신청·관리자 참가자 목록 | POST / GET `/meetings/{meeting_id}/registrations` |
 | 본인 신청과 일정 정보 | GET `/seniors/{senior_id}/registrations` |
 | 신청 취소 | DELETE `/meetings/{meeting_id}/registrations/{registration_id}` |
+| 그룹 게시글 목록·작성 | GET / POST `/groups/{group_id}/posts` |
+| 게시글 상세·수정·삭제 | GET / PATCH / DELETE `/posts/{post_id}` |
+| 댓글 목록·작성 | GET / POST `/posts/{post_id}/comments` |
+| 댓글 수정·삭제 | PATCH / DELETE `/comments/{comment_id}` |
 
 - 소유자는 인증 문맥에서 결정하며 변경할 수 없다. 독립 일정은 group_id 생략/null만 허용한다.
 - 시각은 시간대 포함 RFC 3339. 종료>시작, 마감≤시작, 생성/수정 시 미래 시작을 검사한다.
@@ -104,6 +108,16 @@ owner는 전역 관리자가 아니다. 인증된 회원 누구나 개설하며 
 - 일정 from/to는 시작 시각의 `[from,to)`. group_id 생략 시 그룹·독립 일정 모두 포함한다.
   일반 목록에는 중단·취소 이력도 포함한다. 추천은 같은 지역의 모집 중·미래·자리 있음·미신청 일정만 대상으로,
   그룹 관심사 일치 수 내림차순 후 시작순이다. 독립 모임도 포함한다. 추천 기본 3/최대 10.
+
+게시글 생성은 `{"title":"산책 후기","content":"함께 걸어서 즐거웠습니다."}`,
+댓글 생성·수정은 `{"content":"다음에도 함께해요."}`다. 작성자 ID는 인증 문맥에서 정한다.
+게시글 수정은 title/content 중 하나 이상을 받는다. 제목 1–100자·본문 1–5,000자·댓글 1–1,000자이며
+앞뒤 공백 제거 후 검증한다. 공백만 입력·null·빈 PATCH·미정의 필드는 422다.
+본인만 수정할 수 있고 작성자 또는 해당 그룹장만 삭제할 수 있다. 게시글 작성자는 타인의 댓글 삭제 권한을 얻지 않는다.
+게시글은 소프트 삭제하고 댓글은 실제 삭제한다. 삭제된 글의 상세·수정·재삭제와 모든 댓글 접근은 404다.
+게시글 최신순·댓글 생성순에 UUID로 동률을 구분하며, 커서는 해당 그룹/게시글에서만 재사용한다.
+표시 이름은 현재 프로필에서, 댓글 수는 남아 있는 댓글에서 계산한다. 전화 동의는 요구하지 않는다.
+그룹 중단에 대한 별도 게시판 제한은 명세에 없어 추가하지 않았다. 변경 시 계약과 테스트를 함께 수정한다.
 
 취소는 신청·버전·이력과 `cancellation_notices`의 수신자별 전달 대기를 함께 저장한다.
 취소 직전 참가자용 알림과 개설자의 직접 전화 안내를 중복 없이 남긴다. **전달 대기 저장은 발송 완료가 아니다.**
@@ -155,19 +169,23 @@ GitHub Actions는 별도 PostgreSQL 17을 실행하고 해당 변수를 켠다. 
 `python -m uv run --locked ruff format --check .`를 사용한다.
 PostgreSQL 실행 상태에서 `$env:RUN_DB_TESTS='1'`을 설정하고 `python -m uv run --locked pytest`로 전체 테스트한다.
 
-Group/Meeting 테스트는 실제 PostgreSQL에서 권한·멱등·버전·취소 롤백·동시성을 검증한다.
-업무 테이블 7개·운영 테이블 2개이며 Alembic head는 4095cfc36d7d다.
+2026-11-16 커뮤니티 추가 후 컨테이너 검증: C 53개·T 5개 통과, 양쪽 Ruff 통과.
+Alembic `7ac4d29b10ef`를 로컬 DB에 적용했고 ORM 정합성 검사도 통과했다. 업무 테이블 9개·운영 테이블 2개다.
+커뮤니티 신규 테스트 18개는 CRUD·권한·입력·커서·삭제 노출 차단·실제 PostgreSQL 잠금 경합을 포함한다.
+빈 격리 스키마에서 전체 upgrade·downgrade/upgrade도 검증했다. 기존 개발 데이터는 보존한다.
 실제 인증·전화·모델 호출·알림 전달·운영 배포·원격 CI는 검증하지 않았다.
 
 ## 코드와 문서 위치
 
 `app/db/models`는 C의 공유 매핑, `migrations`는 공유 DDL 이력이다.
 `modules/auth`는 인증 경계, `modules/groups`·`modules/meetings`는 API·업무·조회·신청·취소다.
+`modules/community`는 게시글·댓글 API·권한·조회다. 모든 댓글 변경과 게시글 변경은 부모 게시글을 먼저 잠근다.
 service가 트랜잭션을 소유하고 그룹→일정 순서로 잠근다. 멱등 요청은 DB advisory lock으로 직렬화한다.
 `scripts/seed_dev.py`는 개발 계정, `app/workers/meeting_status.py`는 명시적인 상태 갱신 진입점이다.
 T는 이 저장소를 import하거나 모임 데이터를 직접 변경하지 않는다. T 업무 API·DB 매핑은 아직 없다.
 
 공통 [지침](../AGENTS.md), 서버 [지침](AGENTS.md),
 [세부 구현·검증 기록](../docs/GROUP_MEETING_IMPLEMENTATION.md),
+[커뮤니티 구현·검증 기록](../docs/COMMUNITY_IMPLEMENTATION.md),
 [API 계약](../docs/MVP_API_CONTRACT.md), [DB 정의](../docs/MVP_DB_SCHEMA.md)를 함께 확인한다.
 개발 문서·원본 PDF는 루트 docs에 유지하며 두 서버 저장소의 Git 추적 범위 밖이다.
