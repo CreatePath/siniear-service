@@ -5,12 +5,12 @@
 단독 체크아웃의 환경 실행·서버 개요는 [README.md](README.md)를 기준으로 한다.
 현재 개발 환경·상태 API와 C01–C14 Group/Meeting·D01–D09 커뮤니티 앱 API, 개발용 인증·seed·SQLAlchemy·Alembic을 구현했다.
 게시글·댓글의 권한·삭제·잠금·검증은 [커뮤니티 구현 기록](../docs/COMMUNITY_IMPLEMENTATION.md)을 확인한다.
-[세부 구현 기록](../docs/GROUP_MEETING_IMPLEMENTATION.md)을 확인한다. 실제 인증·통화 도구·알림 발송은 후속 작업이다.
+[세부 구현 기록](../docs/GROUP_MEETING_IMPLEMENTATION.md)을 확인한다. 통화 도구는 구현했으며 실제 인증·알림 발송은 후속 작업이다. 통화 범위는 [구현 기록](../docs/CALL_IMPLEMENTATION.md)을 따른다.
 업무 DB 작업 전 완성된 [ERD 원본](../docs/ERD.md), [그림](../docs/ERD.html),
 [테이블·컬럼 설명](../docs/ERD_DICTIONARY.md)과 [DB 정의·물리 설계 보완안](../docs/MVP_DB_SCHEMA.md)을 읽는다.
-업무 ERD는 16개 테이블·116개 컬럼 기준이며 현재 회원 기반·그룹·일정·신청·게시글·댓글 9개 업무 테이블을 DB에 적용했다.
-운영 저장소 idempotency_records·cancellation_notices는 별도다. 통화 FK는 P6 전까지 NULL CHECK로 제한하며 이후 마이그레이션으로 연결한다.
-calls의 임베딩·모델 ID·입력 요약 해시 세 컬럼은 T 소유이며 앱 응답에는 노출하지 않는다. 모델·차원은 gemini-embedding-001·768로 확정했고 물리 타입은 미정이다.
+업무 ERD는 16개 테이블·116개 컬럼 기준이며 현재 전체 16개 업무 테이블을 로컬 DB에 적용했다.
+운영 저장소는 idempotency_records·cancellation_notices·call_executions·outbox_messages·inbox_events·call_processing_jobs 6개다. 통화 FK와 원문 복합 FK를 연결했다.
+calls의 임베딩·모델 ID·입력 요약 해시 세 컬럼은 T 소유이며 앱 응답에는 노출하지 않는다. 모델·차원은 gemini-embedding-001·768로 확정했고 현재 물리 타입은 double precision[]이다. 검색 임계값은 품질 평가 전 구현값이다.
 ERD에 남은 미결정 정책과 조건부·운영 저장소 제안은 별도로 확인한다.
 
 ## 개발·검증 명령
@@ -28,7 +28,7 @@ Python 3.12와 uv 0.13.8을 사용한다. 의존성 변경 시 `pyproject.toml`�
 호스트 검사 명령과 DB 설정은 README에 있다. 공통 Compose의 DB volume을 일반 재시작 중 삭제하지 않는다.
 ORM은 SQLAlchemy, DB 변경 이력은 Alembic으로 이 저장소에서 단일 관리한다. 적용 명령은 README를 따른다.
 업무 DB 테스트는 `docker compose exec -e RUN_DB_TESTS=1 service pytest`로 실행한다. 이 변수가 없으면 업무 테스트가 skip된다.
-실제 로그인·서비스 인증·운영 배포는 아직 없고 가상 인증은 개발·테스트에서만 명시적으로 켤 수 있다.
+방향별 서비스 비밀·scope를 구현했다. 실제 로그인·운영 배포는 아직 없고 가상 인증은 개발·테스트에서만 명시적으로 켤 수 있다.
 
 ## 책임과 경계
 

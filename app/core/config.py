@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "production"
     dev_auth_enabled: bool = False
 
+    internal_inbound_token: SecretStr = SecretStr("")
+    internal_outbound_token: SecretStr = SecretStr("")
+    internal_peer: str = "T"
+    internal_scopes: str = "calls:events meetings:read meetings:write interests:write alerts:read"
+    peer_base_url: str = "http://call:8000"
+
     @model_validator(mode="after")
     def guard_dev_auth(self):
         if self.dev_auth_enabled and self.app_env == "production":

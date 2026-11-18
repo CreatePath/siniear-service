@@ -9,7 +9,9 @@ from sqlalchemy import tuple_
 from app.core.errors import DomainError
 
 
-def paginate(session, query, *, column, id_column, limit, cursor, scope, descending=False):
+def paginate(
+    session, query, *, column, id_column, limit, cursor, scope, descending=False, value_for_row=None
+):
     scope_hash = hashlib.sha256(json.dumps(scope, sort_keys=True, default=str).encode()).hexdigest()
     if cursor:
         try:
@@ -38,7 +40,7 @@ def paginate(session, query, *, column, id_column, limit, cursor, scope, descend
     next_cursor = None
     if len(rows) > limit:
         last = rows[limit - 1]
-        value = getattr(last, column.key)
+        value = value_for_row(last) if value_for_row else getattr(last, column.key)
         next_cursor = base64.urlsafe_b64encode(
             json.dumps(
                 {

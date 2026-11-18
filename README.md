@@ -1,14 +1,14 @@
 # 신이어 서비스 서버
 
 C는 회원·모임·일정·참가 신청·정책을, T(`siniear-call`)는 통화 실행·원문·요약·검색을 담당한다.
-현재 상태 확인 API와 **Group/Meeting 앱 API C01–C14·커뮤니티 API D01–D09**, 개발용 인증 경계, 합성 계정 seed,
-SQLAlchemy 모델·Alembic 마이그레이션을 구현했다. 실제 로그인·실명 인증·통화 도구·알림 발송은 후속 작업이다.
+상태 확인·Group/Meeting C01–C14·커뮤니티 D01–D09·통화 예약/기록 B01–B06·내부 F01–F09를 구현했다.
+개발용 인증·합성 seed·SQLAlchemy·Alembic을 사용한다. 실제 로그인·실명 인증·알림 발송은 후속 작업이다.
 
 ## 작업 기록과 커밋
 
 작업마다 관련 GitHub Issue를 확인하고 없으면 생성한다. [작업 템플릿](.github/ISSUE_TEMPLATE/task.md)과
 [버그 템플릿](.github/ISSUE_TEMPLATE/bug_report.md)에 배경·범위·완료 조건을 적고, 완료 시 검증 결과를 남긴다.
-커밋은 `type(scope): 한국어 요약` 형식으로 작성하며 scope는 선택, 제목은 72자 이내를 권장한다.
+커밋은 `[#번호] type(scope): 한국어 요약` 형식으로 작성하며 scope는 선택, 제목은 72자 이내를 권장한다.
 유형은 `feat`, `refactor`, `fix`, `docs`, `rm`, `test`, `chore`, `revert`를 사용하고,
 footer에 `Refs: #번호`를 기록한다. 다른 저장소의 Issue는 전체 URL로 연결한다.
 호환성을 깨는 변경에는 `!`와 `BREAKING CHANGE:`를 함께 쓴다.
@@ -68,7 +68,7 @@ Swagger Authorize에 `dev:<user_id>`를 입력한다. HTTP 헤더는 `Authorizat
 
 owner는 전역 관리자가 아니다. 인증된 회원 누구나 개설하며 본인이 개설한 대상만 관리한다.
 인증 성공은 `identity_verifications`에서 계산하며 나중의 실패 이력이 이전 성공을 취소하지 않는다.
-비상연락처·통화 fixture와 실제 계정 API는 아직 없다.
+통화·비상연락처 합성 fixture는 격리된 테스트에만 추가했다. seed와 실제 회원/연락처 관리 API는 확장하지 않았다.
 
 ## 구현 API와 계약
 
@@ -121,8 +121,7 @@ owner는 전역 관리자가 아니다. 인증된 회원 누구나 개설하며 
 
 취소는 신청·버전·이력과 `cancellation_notices`의 수신자별 전달 대기를 함께 저장한다.
 취소 직전 참가자용 알림과 개설자의 직접 전화 안내를 중복 없이 남긴다. **전달 대기 저장은 발송 완료가 아니다.**
-알림 API·발송·실패 재시도는 P9, 통화 중 신청·동의 검증은 P6에서 연결한다.
-통화 FK 연결 전까지 신청/작업의 call_id·confirmation_turn_id는 DB CHECK로 NULL만 허용한다.
+알림 API·발송·실패 재시도는 P9에서 연결한다. 통화 중 신청·동의 검증과 calls/원문 복합 FK는 이번에 연결했다.
 
 마감·종료 상태는 읽을 때도 시각으로 계산하여 작업 지연 중 신청을 허용하지 않는다.
 저장 상태 갱신은 아래 명령으로 실행하며 API 시작 시 자동 실행하지 않는다. 주기 실행은 배포 시 연결한다.
@@ -157,7 +156,7 @@ docker compose exec -e RUN_DB_TESTS=1 service pytest
 docker compose exec service alembic check
 docker compose exec call ruff check .
 docker compose exec call ruff format --check .
-docker compose exec call pytest
+docker compose exec -e RUN_DB_TESTS=1 call pytest
 ```
 
 업무 테스트는 PostgreSQL에 매 테스트마다 임의 `test_<UUID>` 스키마를 만들고 마이그레이션을 적용한 뒤 제거한다.
@@ -189,3 +188,38 @@ T는 이 저장소를 import하거나 모임 데이터를 직접 변경하지 �
 [커뮤니티 구현·검증 기록](../docs/COMMUNITY_IMPLEMENTATION.md),
 [API 계약](../docs/MVP_API_CONTRACT.md), [DB 정의](../docs/MVP_DB_SCHEMA.md)를 함께 확인한다.
 개발 문서·원본 PDF는 루트 docs에 유지하며 두 서버 저장소의 Git 추적 범위 밖이다.
+
+## 통화 기능 — 2026-11-16 추가
+
+[C #5](https://github.com/CreatePath/siniear-service/issues/5), [T #2](https://github.com/CreatePath/siniear-call/issues/2).
+공유 마이그레이션 c6a929f2dc12를 로컬 DB에 적용했다. 업무 테이블 총 16개, 운영 테이블 총 6개다.
+신청/작업의 통화 FK를 연결했다. 전화 신청 이력이 있는 DB의 downgrade는 기존 제약 복원 단계에서 거부되므로 운영 롤백 절차로 사용하지 않는다.
+
+| 기능 | 경로 (/api 접두사) |
+| --- | --- |
+| 본인 예약 목록·생성 | GET / POST /seniors/{senior_id}/call-schedules |
+| 본인 예약 수정·삭제 | PATCH / DELETE /seniors/{senior_id}/call-schedules/{schedule_id} |
+| 본인 통화 목록·요약 상세 | GET /seniors/{senior_id}/calls[/{call_id}] |
+| 내부 모임 도구·상태 이벤트·비상연락 조회·관심사 | F01–F09, Swagger 및 루트 API 계약 참조 |
+
+예약은 Asia/Seoul, MON–SUN, HH:mm를 사용한다. 미응답 종료 3분 후 같은 회차에서 최초 포함 최대 3회다.
+세 번 모두 no_answer이면 등록 순서대로 비상연락을 전체 최대 3회 실행한다. 기술 실패와 중복 이벤트는 집계에서 제외한다.
+안부전화와 비상전화는 회원별로 순차 실행한다. 회원 NO KEY UPDATE 잠금은 정책을 직렬화하면서 FK 참조 검사를 허용한다.
+회차·queued Call·전송 대기를 함께 저장하고, C는 T의 durable 이벤트 근거를 확인하며 T 소유 상태를 덮어쓰지 않는다.
+통화 중 신청/취소는 저장된 안내·명시적 동의·턴 재사용·신청 버전을 검증한다. 취소는 본인 신청만 허용한다.
+통화 목록은 시작 시각(없으면 예약 시각)과 UUID 내림차순이다. duration_seconds는 answered_at부터 ended_at까지이며 수신 근거가 없으면 null이다.
+
+Compose의 C_TO_T_TOKEN/T_TO_C_TOKEN을 방향별로 설정한다. 빈 토큰은 내부 API를 거부한다.
+단독 C 실행은 INTERNAL_INBOUND_TOKEN/OUTBOUND_TOKEN, INTERNAL_SCOPES, PEER_BASE_URL을 사용한다.
+설정 예시는 .env.example, 공급자 설정과 T 실행 방법은 [T README](../siniear-call/README.md)를 따른다.
+작업자는 한 번 실행한 뒤 종료하며 API 시작 시 자동 실행하지 않는다. 주기 실행은 배포 단계에서 연결한다.
+
+```powershell
+docker compose exec service python -m app.workers.calls
+docker compose exec call python -m app.workers.calls
+```
+
+기본 CALL_PROVIDER=disabled이며 이번 검증은 fake만 사용했다. 실제 전화·유료 모델 호출은 수행하지 않았다.
+최종 컨테이너 테스트 C 68개·T 27개 통과, 양쪽 Ruff 검사·포맷 통과, alembic check 차이 없음.
+실제 로그인·동의 변경/탈퇴 API 연결, 실제 음성·검색 품질과 운영 배포는 남아 있다.
+[통화 구현·검증 기록](../docs/CALL_IMPLEMENTATION.md)에 구현 선택과 수정 이력을 정리했다.

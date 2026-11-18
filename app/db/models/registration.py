@@ -1,7 +1,16 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,8 +23,6 @@ class Registration(Base):
         UniqueConstraint("meeting_id", "senior_id"),
         CheckConstraint("status IN ('confirmed','canceled')", name="status"),
         CheckConstraint("version >= 1", name="version"),
-        # P6 replaces this guard with the calls FK; no unvalidated phone data is accepted.
-        CheckConstraint("call_id IS NULL", name="app_only"),
         Index("ix_registrations_meeting_status", "meeting_id", "status"),
         Index("ix_registrations_senior_status", "senior_id", "status", "id"),
     )
@@ -24,7 +31,7 @@ class Registration(Base):
     senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     status: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(default=1)
-    call_id: Mapped[UUID | None]
+    call_id: Mapped[UUID | None] = mapped_column(ForeignKey("calls.id"))
 
 
 class RegistrationAction(Base):
@@ -32,7 +39,11 @@ class RegistrationAction(Base):
     __table_args__ = (
         CheckConstraint("action IN ('register','cancel')", name="action"),
         CheckConstraint("resulting_version >= 1", name="version"),
-        CheckConstraint("call_id IS NULL AND confirmation_turn_id IS NULL", name="app_only"),
+        CheckConstraint("(call_id IS NULL) = (confirmation_turn_id IS NULL)", name="phone_pair"),
+        ForeignKeyConstraint(
+            [("call_id"), ("confirmation_turn_id")],
+            [("transcript_turns.call_id"), ("transcript_turns.turn_id")],
+        ),
         UniqueConstraint("call_id", "confirmation_turn_id"),
     )
     registration_id: Mapped[UUID] = mapped_column(
@@ -41,7 +52,7 @@ class RegistrationAction(Base):
     resulting_version: Mapped[int] = mapped_column(primary_key=True)
     actor_senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     action: Mapped[str] = mapped_column(Text)
-    call_id: Mapped[UUID | None]
+    call_id: Mapped[UUID | None] = mapped_column(ForeignKey("calls.id"))
     confirmation_turn_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

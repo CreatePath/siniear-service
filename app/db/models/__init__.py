@@ -1,3 +1,4 @@
+from app.db.models import call, call_runtime
 from app.db.models.community import Comment, Group, Meeting, Post
 from app.db.models.identity import IdentityVerification, Senior, User
 from app.db.models.registration import (
@@ -8,6 +9,8 @@ from app.db.models.registration import (
 )
 
 __all__ = [
+    "call",
+    "call_runtime",
     "Post",
     "Comment",
     "Group",
