@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Meeting, Registration, Senior
 from app.workers.meeting_status import refresh_statuses
 from scripts.seed_dev import ids
+from tests.integration.conftest import join
 from tests.integration.test_groups_meetings import auth, create_group, create_meeting, meeting_data
 from tests.integration.test_registrations import cancel, signup
 
@@ -51,6 +52,7 @@ def test_search_pagination_and_filter_binding(api):
 
 def test_recommendations_and_private_lists(api, db_engine):
     group = create_group(api)
+    join(api, group["id"])
     data = meeting_data()
     del data["region_code"]
     grouped = api.post(f"/api/groups/{group['id']}/meetings", json=data).json()
@@ -112,6 +114,7 @@ def test_updates_and_effective_status(api, db_engine):
 
 def test_repeat_meeting_cancel_and_group_region_snapshot(api, db_engine):
     group = create_group(api)
+    join(api, group["id"])
     data = meeting_data()
     del data["region_code"]
     meeting = api.post(f"/api/groups/{group['id']}/meetings", json=data).json()

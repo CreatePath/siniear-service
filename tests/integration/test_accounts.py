@@ -131,6 +131,11 @@ def test_unlink_failure_rolls_back_and_retry_only_erases_owner(api, sign_in, mon
     assert api.post("/api/seniors", json=PROFILE).status_code == 201
     assert api.post("/api/seniors", json=PROFILE, headers=other_actor).status_code == 201
     group = create_group(api)
+    join_path = f"/api/groups/{group['id']}/join-requests"
+    request = api.post(join_path, headers={**other_actor, "Idempotency-Key": "apply"}).json()
+    assert (
+        api.patch(join_path + "/" + request["id"], json={"status": "approved"}).status_code == 200
+    )
     payload = meeting_data()
     del payload["region_code"]
     meeting = api.post(f"/api/groups/{group['id']}/meetings", json=payload).json()
@@ -154,5 +159,12 @@ def test_unlink_failure_rolls_back_and_retry_only_erases_owner(api, sign_in, mon
     assert api.delete("/api/users/me").status_code == 204
     assert unlinked == [101]
     assert api.get(path).status_code == 401
-    assert api.get(path, headers=other_actor).json()["status"] == "canceled"
+    assert api.get(path, headers=other_actor).status_code == 403
+    other_id = api.get("/api/users/me", headers=other_actor).json()["senior_id"]
+    assert (
+        api.get(f"/api/seniors/{other_id}/registrations", headers=other_actor).json()["items"][0][
+            "status"
+        ]
+        == "canceled"
+    )
     assert api.get(f"/api/groups/{group['id']}", headers=other_actor).json()["status"] == "closed"

@@ -95,8 +95,10 @@ def seed(session, now=None):
         ("walk", "[테스트] 동네 산책 모임", "산책"),
         ("books", "[테스트] 함께 읽는 독서 모임", "독서"),
     ):
-        session.add(
-            Group(
+        session.execute(
+            Group.__table__.insert()
+            .inline()
+            .values(
                 id=demo_id("group", name),
                 owner_id=demo_id("senior", "owner"),
                 name=title,
@@ -107,6 +109,14 @@ def seed(session, now=None):
             )
         )
     session.flush()
+
+    if "nickname" in seniors.c and session.scalar(
+        text("SELECT to_regclass('group_memberships') IS NOT NULL")
+    ):
+        from app.modules.groups.repository import issue_membership
+
+        for group_name in ("walk", "books"):
+            issue_membership(session, demo_id("group", group_name), demo_id("senior", "owner"), now)
 
     for name, title, group, days, capacity in (
         ("walk", "[테스트] 참가 신청 가능한 산책", "walk", 7, 10),
@@ -175,8 +185,10 @@ def seed(session, now=None):
         ("reply", "hello", "owner"),
         ("book-reply", "books", "member"),
     ):
-        session.add(
-            Comment(
+        session.execute(
+            Comment.__table__.insert()
+            .inline()
+            .values(
                 id=demo_id("comment", name),
                 post_id=demo_id("post", post),
                 author_id=demo_id("senior", author),

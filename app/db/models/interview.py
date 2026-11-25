@@ -1,7 +1,18 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import ARRAY, CheckConstraint, DateTime, ForeignKey, Text, UniqueConstraint, func
+from sqlalchemy import (
+    ARRAY,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,9 +52,28 @@ class InterviewTurn(Base):
 
 class Card(Base):
     __tablename__ = "cards"
-    __table_args__ = (CheckConstraint("version > 0", name="version"),)
+    __table_args__ = (
+        CheckConstraint("version > 0", name="version"),
+        Index(
+            "uq_personal_card",
+            "senior_id",
+            unique=True,
+            postgresql_where=text("membership_id IS NULL"),
+        ),
+        ForeignKeyConstraint(
+            ["membership_id", "senior_id"], ["group_memberships.id", "group_memberships.senior_id"]
+        ),
+        ForeignKeyConstraint(
+            ["selected_title_id", "membership_id"],
+            ["membership_titles.id", "membership_titles.membership_id"],
+        ),
+    )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"), unique=True)
+    senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
+    membership_id: Mapped[UUID | None] = mapped_column(unique=True)
+    selected_title_id: Mapped[UUID | None]
+    role: Mapped[str | None] = mapped_column(Text)
+    group_intro: Mapped[str | None] = mapped_column(Text)
     color_code: Mapped[str] = mapped_column(Text, server_default="#1D961B")
     template_key: Mapped[str] = mapped_column(Text)
     visible_fields: Mapped[list[str]] = mapped_column(ARRAY(Text))

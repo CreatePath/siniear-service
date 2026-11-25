@@ -10,7 +10,7 @@ from app.modules.meetings.registration_repository import (
     record_action,
     registration_response,
 )
-from app.modules.meetings.repository import get_meeting
+from app.modules.meetings.repository import get_meeting, require_meeting_access
 from app.modules.meetings.service import effective_status, now, require_active
 
 OPERATION = "meeting.register"
@@ -29,11 +29,12 @@ def register(session, principal, meeting_id, key):
                 IdempotencyRecord.key == key,
             )
         )
+        meeting, group = get_meeting(session, meeting_id, lock=True)
+        require_meeting_access(session, meeting, principal.senior_id)
         if cached:
             if cached.request_hash != request_hash:
                 raise DomainError(409, "IDEMPOTENCY_CONFLICT", "같은 키의 요청 대상이 다릅니다.")
             return cached.http_status, cached.response_body
-        meeting, group = get_meeting(session, meeting_id, lock=True)
         registration = session.scalar(
             select(Registration).where(
                 Registration.meeting_id == meeting_id, Registration.senior_id == principal.senior_id

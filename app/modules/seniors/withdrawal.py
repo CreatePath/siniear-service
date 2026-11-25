@@ -21,14 +21,35 @@ from app.modules.auth.service import unauthorized
 from app.modules.meetings.cancellation import cancel_group_meetings, cancel_locked_meeting
 
 
-def leave_meetings(session, senior_id, at):
-    groups = session.scalars(
+def leave_meetings(session, senior_id):
+    from app.db.models.membership import JoinRequest, Membership
+    from app.modules.groups.repository import end_memberships
+
+    affected = (
         select(Group)
-        .where(Group.owner_id == senior_id, Group.status == "active")
+        .where(
+            (Group.owner_id == senior_id)
+            | Group.id.in_(
+                select(JoinRequest.group_id).where(
+                    JoinRequest.senior_id == senior_id, JoinRequest.status == "pending"
+                )
+            )
+            | Group.id.in_(
+                select(Membership.group_id).where(
+                    Membership.senior_id == senior_id, Membership.left_at.is_(None)
+                )
+            )
+        )
         .order_by(Group.id)
         .with_for_update()
     )
+    groups = session.scalars(affected).all()
+    at = datetime.now(UTC)
+    end_memberships(session, at, senior_id=senior_id)
     for group in groups:
+        if group.owner_id != senior_id or group.status != "active":
+            continue
+        end_memberships(session, at, group_id=group.id)
         group.status = "closed"
         cancel_group_meetings(session, group.id, senior_id, at)
     for meeting in session.scalars(
@@ -67,8 +88,8 @@ def withdraw(session, user_id):
                 )
                 if senior:
                     session.execute(delete(Interview).where(Interview.senior_id == senior.id))
+                    leave_meetings(session, senior.id)
                     session.execute(delete(Card).where(Card.senior_id == senior.id))
-                    leave_meetings(session, senior.id, at)
                     session.execute(
                         delete(IdempotencyRecord).where(
                             IdempotencyRecord.subject_id == str(senior.id)

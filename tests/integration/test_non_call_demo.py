@@ -50,30 +50,46 @@ def test_seed_preserves_edits_cancellation_and_deleted_comment(demo_engine):
     with Session(demo_engine) as session, session.begin():
         assert demo.seed(session)
     with Session(demo_engine) as session, session.begin():
-        session.get(Group, demo.demo_id("group", "walk")).name = "팀이 수정한 이름"
+        session.execute(
+            text("UPDATE groups SET name=:name WHERE id=:id"),
+            {"name": "팀이 수정한 이름", "id": demo.demo_id("group", "walk")},
+        )
         registration = session.get(Registration, demo.demo_id("registration", "member-walk"))
         registration.status = "canceled"
         registration.version = 2
-        session.delete(session.get(Comment, demo.demo_id("comment", "welcome")))
+        session.execute(
+            text("DELETE FROM comments WHERE id=:id"), {"id": demo.demo_id("comment", "welcome")}
+        )
         first_time = session.get(Meeting, demo.demo_id("meeting", "walk")).starts_at
     with Session(demo_engine) as session, session.begin():
         assert demo.seed(session) is False
-        assert session.get(Group, demo.demo_id("group", "walk")).name == "팀이 수정한 이름"
+        assert (
+            session.scalar(select(Group.name).where(Group.id == demo.demo_id("group", "walk")))
+            == "팀이 수정한 이름"
+        )
         assert (
             session.get(Registration, demo.demo_id("registration", "member-walk")).status
             == "canceled"
         )
-        assert session.get(Comment, demo.demo_id("comment", "welcome")) is None
+        assert (
+            session.scalar(
+                select(Comment.id).where(Comment.id == demo.demo_id("comment", "welcome"))
+            )
+            is None
+        )
         assert session.get(Meeting, demo.demo_id("meeting", "walk")).starts_at == first_time
         assert session.scalar(select(func.count()).select_from(User)) == 4
         assert session.scalar(select(func.count()).select_from(Post)) == 3
 
 
 def test_seed_rolls_back_all_data_on_late_failure(demo_engine, monkeypatch):
-    def fail(**kwargs):
-        raise RuntimeError("simulated late write failure")
+    from sqlalchemy import event
 
-    monkeypatch.setattr(demo, "Comment", fail)
+    @event.listens_for(demo_engine, "before_cursor_execute")
+    def fail(conn, cursor, statement, parameters, context, executemany):
+        if statement.startswith("INSERT INTO comments"):
+            raise RuntimeError("simulated late write failure")
+
     with pytest.raises(RuntimeError, match="simulated"):
         with Session(demo_engine) as session, session.begin():
             demo.seed(session)
@@ -116,12 +132,12 @@ def test_demo_accounts_support_non_call_api_workflow(demo_engine):
             assert client.get("/api/groups").status_code == 200
             client.headers["Authorization"] = "Bearer " + ids["accounts"]["member"]["swagger_token"]
             assert len(client.get("/api/groups").json()["items"]) == 2
-            assert len(client.get("/api/meetings").json()["items"]) == 4
+            assert len(client.get("/api/meetings").json()["items"]) == 1
             full = ids["meetings"]["full"]
             result = client.post(
                 f"/api/meetings/{full}/registrations", headers={"Idempotency-Key": "full"}
             )
-            assert result.status_code == 409
+            assert result.status_code == 403
             solo = ids["meetings"]["solo"]
             path = f"/api/meetings/{solo}/registrations"
             registered = client.post(path, headers={"Idempotency-Key": "solo"})

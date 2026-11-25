@@ -70,3 +70,11 @@ def api(db_engine):
 
 def auth(name):
     return {"Authorization": f"Bearer dev:{ids(name)[0]}"}
+
+
+def join(api, group_id, name="member"):
+    path = f"/api/groups/{group_id}/join-requests"
+    result = api.post(path, headers={**auth(name), "Idempotency-Key": group_id + name})
+    assert result.status_code == 201
+    decision = api.patch(path + "/" + result.json()["id"], json={"status": "approved"})
+    assert decision.status_code == 200

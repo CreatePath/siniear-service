@@ -41,6 +41,10 @@ def normalize_photo(file):
 
 @router.post("/me/profile-photos", status_code=201)
 def upload(file: UploadFile, account: Member, session: Database) -> PhotoCreated:
+    return PhotoCreated(photo_id=store_image(file, account, session, "profile_photo"))
+
+
+def store_image(file, account, session, purpose):
     content = normalize_photo(file.file)
     with session.begin():
         if not session.scalar(
@@ -49,10 +53,10 @@ def upload(file: UploadFile, account: Member, session: Database) -> PhotoCreated
             .with_for_update(read=True)
         ):
             raise unauthorized()
-        asset = MediaAsset(owner_user_id=account.user_id, purpose="profile_photo", content=content)
+        asset = MediaAsset(owner_user_id=account.user_id, purpose=purpose, content=content)
         session.add(asset)
         session.flush()
-        return PhotoCreated(photo_id=asset.id)
+        return asset.id
 
 
 @router.get("/me/profile-photos/{photo_id}", response_class=Response)

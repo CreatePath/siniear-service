@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from pydantic import AwareDatetime, BaseModel
 
-from app.api.dependencies import Actor, Database
+from app.api.dependencies import Actor, Cursor, Database, Limit
 from app.core.errors import API_ERRORS
 from app.core.schemas import Page
 from app.modules.meetings import query_service
@@ -12,8 +12,6 @@ from app.modules.meetings.registration_schemas import RegistrationResponse, Regi
 from app.modules.meetings.schemas import MeetingResponse, MeetingStatus
 
 router = APIRouter(tags=["meetings"], responses=API_ERRORS)
-Limit = Annotated[int, Query(ge=1, le=100)]
-Cursor = Annotated[str | None, Query(max_length=2048)]
 RegistrationStatus = Literal["confirmed", "canceled"]
 
 
@@ -35,6 +33,7 @@ def listing(
 ):
     return query_service.list_meetings(
         session,
+        actor.senior_id,
         group_id=group_id,
         region_code=region_code,
         from_time=from_time,

@@ -19,6 +19,10 @@ class Group(Base):
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text, default="")
     region_code: Mapped[str] = mapped_column(Text)
+    badge_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL")
+    )
+    activity_goals: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
     interests: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

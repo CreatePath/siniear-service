@@ -11,6 +11,8 @@ class GroupCreate(Input):
     name: Name
     description: Description = ""
     region_code: Region
+    badge_id: UUID | None = None
+    activity_goals: Interests = Field(default_factory=list)
     interests: Interests = Field(default_factory=list)
 
 
@@ -18,6 +20,8 @@ class GroupPatch(Patch):
     name: Name | None = None
     description: Description | None = None
     region_code: Region | None = None
+    badge_id: UUID | None = None
+    activity_goals: Interests | None = None
     interests: Interests | None = None
     status: Literal["closed"] | None = None
 
@@ -29,6 +33,10 @@ class GroupResponse(BaseModel):
     name: str
     description: str
     region_code: str
+    badge_url: str | None = None
+    activity_goals: list[str]
+    my_membership_status: Literal["owner", "member", "pending", "none"] = "none"
+    member_count: int = 0
     interests: list[str]
     status: Literal["active", "closed"]
     created_at: datetime

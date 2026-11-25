@@ -5,8 +5,8 @@ from app.core.idempotency import remember, replay
 from app.db.models.identity import Senior
 from app.db.models.interview import Card
 from app.modules.cards.schemas import Confirmed
-from app.modules.cards.service import card_view, project_card
 from app.modules.cards.service import changed as card_changed
+from app.modules.cards.service import project_card, render_card
 from app.modules.interviews.service import changed, owned
 from app.modules.seniors.profile import Profile, check_name, check_photo, edit_profile
 
@@ -24,7 +24,9 @@ def preview(session, actor, interview_id, data):
     with session.begin():
         row = owned(session, actor.senior_id, interview_id)
         senior = session.get(Senior, actor.senior_id)
-        card = session.scalar(select(Card).where(Card.senior_id == senior.id))
+        card = session.scalar(
+            select(Card).where(Card.senior_id == senior.id, Card.membership_id.is_(None))
+        )
         check_versions(row, senior, card, data)
         edits = data.profile.model_dump(exclude_unset=True)
         check_photo(session, senior.user_id, edits.get("photo_id"))
@@ -45,7 +47,11 @@ def confirm(session, actor, interview_id, data, key):
         record = replay(session, *args)
         row = owned(session, actor.senior_id, interview_id, lock=True)
         senior = session.get(Senior, actor.senior_id, with_for_update=True)
-        card = session.scalar(select(Card).where(Card.senior_id == senior.id).with_for_update())
+        card = session.scalar(
+            select(Card)
+            .where(Card.senior_id == senior.id, Card.membership_id.is_(None))
+            .with_for_update()
+        )
         if not record:
             check_versions(row, senior, card, data)
             edit_profile(session, senior, data.profile, data.profile_version)
@@ -67,5 +73,5 @@ def confirm(session, actor, interview_id, data, key):
         return Confirmed(
             interview_id=row.id,
             profile=Profile.model_validate(senior),
-            card=card_view(card, senior),
+            card=render_card(session, card, owner=True),
         )

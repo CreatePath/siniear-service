@@ -1,10 +1,11 @@
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.core.schemas import Input
-from app.modules.seniors.profile import Profile, ProfileEdits
+from app.core.schemas import Input, Name
+from app.modules.seniors.profile import Profile, ProfileEdits, ShortText
 
 Template = Literal["default", "classic", "fresh_start"]
 Color = Literal["#F02820", "#2062D1", "#1D961B", "#8D49CF", "#E64C94"]
@@ -23,7 +24,7 @@ PublicField = Literal[
     "job_title",
     "region_code",
 ]
-GroupField = Literal["role", "group_intro", "title"]
+GroupField = Literal["role", "group_intro"]
 VisibleFields = Annotated[list[PublicField], Field(max_length=13)]
 GroupFields = Annotated[list[PublicField | GroupField], Field(max_length=16)]
 
@@ -43,7 +44,9 @@ class CardSettings(Input):
 
 class CardPatch(CardSettings):
     template_key: Template | None = None
-    visible_fields: VisibleFields | None = None
+    visible_fields: GroupFields | None = None
+    role: Name | None = None
+    group_intro: ShortText | None = None
 
     @model_validator(mode="after")
     def changes(self):
@@ -63,10 +66,37 @@ class CardPreview(BaseModel):
     fields: dict[str, str | list[str]]
 
 
-class CardView(CardPreview):
+class PublicCard(CardPreview):
     id: UUID
+
+
+class GroupInfo(BaseModel):
+    id: UUID
+    name: str
+    badge_url: str | None
+    joined_at: datetime
+
+
+class PublicGroupCard(PublicCard):
+    kind: Literal["group"] = "group"
+    group: GroupInfo
+
+
+class CardView(PublicCard):
     version: int
     visible_fields: VisibleFields
+
+
+class GroupCardView(PublicGroupCard):
+    version: int
+    visible_fields: GroupFields
+    membership_id: UUID
+    role: str | None
+    group_intro: str | None
+
+
+OwnedView = GroupCardView | CardView
+PeerView = PublicGroupCard | PublicCard
 
 
 class Confirmation(CardSettings):

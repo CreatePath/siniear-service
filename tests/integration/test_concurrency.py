@@ -16,6 +16,7 @@ from app.modules.meetings.schemas import MeetingCreate, MeetingPatch
 from app.modules.meetings.service import create_meeting as create_schedule
 from app.modules.meetings.service import update_meeting
 from scripts.seed_dev import ids
+from tests.integration.conftest import join
 from tests.integration.test_groups_meetings import create_group, create_meeting, meeting_data
 from tests.integration.test_registrations import signup
 
@@ -81,6 +82,7 @@ def test_registration_races_with_manager_change(api, db_engine, change):
 @pytest.mark.parametrize("action", ["create", "register"])
 def test_group_shutdown_races_with_activity(api, db_engine, action):
     group = create_group(api)
+    join(api, group["id"])
     data = meeting_data()
     del data["region_code"]
     meeting = api.post(f"/api/groups/{group['id']}/meetings", json=data).json()

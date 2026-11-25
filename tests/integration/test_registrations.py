@@ -12,6 +12,7 @@ from app.db.models import CancellationNotice, Meeting, Registration, Registratio
 from app.modules.auth.dependencies import Principal
 from app.modules.meetings import cancellation, registration_service
 from scripts.seed_dev import ids
+from tests.integration.conftest import join
 from tests.integration.test_groups_meetings import auth, create_group, create_meeting, meeting_data
 
 
@@ -79,6 +80,7 @@ def test_cancel_after_deadline_before_start(api, db_engine):
 
 def test_group_closure_preserves_completed_history(api, db_engine):
     group = create_group(api)
+    join(api, group["id"])
     data = meeting_data()
     del data["region_code"]
     meeting = api.post(f"/api/groups/{group['id']}/meetings", json=data).json()
@@ -95,7 +97,7 @@ def test_group_closure_preserves_completed_history(api, db_engine):
     assert api.patch(path, json={"status": "closed"}).status_code == 200
     assert api.patch(path, json={"status": "closed"}).status_code == 200
     assert api.post(path + "/meetings", json=data).status_code == 409
-    assert signup(api, meeting, "other").status_code == 409
+    assert signup(api, meeting, "other").status_code == 403
     with Session(db_engine) as session:
         assert session.get(Meeting, UUID(past["id"])).status == "completed"
         assert (

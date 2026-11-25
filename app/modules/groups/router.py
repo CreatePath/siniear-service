@@ -23,7 +23,7 @@ def listing(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     cursor: Annotated[str | None, Query(max_length=2048)] = None,
 ):
-    return service.list_groups(session, region_code, keyword, limit, cursor)
+    return service.list_groups(session, actor, region_code, keyword, limit, cursor)
 
 
 @router.post("", response_model=GroupResponse, status_code=201)
@@ -33,7 +33,7 @@ def create(data: GroupCreate, actor: Actor, session: Database):
 
 @router.get("/{group_id}", response_model=GroupResponse)
 def detail(group_id: UUID, actor: Actor, session: Database):
-    return service.read_group(session, group_id)
+    return service.read_group(session, actor, group_id)
 
 
 @router.patch("/{group_id}", response_model=GroupResponse)

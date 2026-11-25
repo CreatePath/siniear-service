@@ -6,7 +6,7 @@ from app.core.schemas import Page
 from app.db.models import Group, Meeting, Registration, Senior
 from app.modules.meetings.registration_repository import registration_response
 from app.modules.meetings.registration_schemas import RegistrationWithMeeting
-from app.modules.meetings.repository import get_meeting
+from app.modules.meetings.repository import accessible_groups, get_meeting
 from app.modules.meetings.service import as_response, now, require_owner
 
 
@@ -19,13 +19,16 @@ def status_expression(at):
     )
 
 
-def list_meetings(session, *, group_id, region_code, from_time, to_time, status, limit, cursor):
+def list_meetings(
+    session, senior_id, *, group_id, region_code, from_time, to_time, status, limit, cursor
+):
     if from_time and to_time and from_time >= to_time:
         raise DomainError(
             422, "INVALID_TIME_RANGE", "조회 종료 시각은 시작 시각보다 늦어야 합니다."
         )
     scope = {
         "resource": "meetings",
+        "senior_id": senior_id,
         "group_id": group_id,
         "region_code": region_code,
         "from": from_time,
@@ -33,7 +36,9 @@ def list_meetings(session, *, group_id, region_code, from_time, to_time, status,
         "status": status,
     }
     with session.begin():
-        query = select(Meeting)
+        query = select(Meeting).where(
+            or_(Meeting.group_id.is_(None), Meeting.group_id.in_(accessible_groups(senior_id)))
+        )
         if group_id:
             query = query.where(Meeting.group_id == group_id)
         if region_code:
@@ -94,7 +99,7 @@ def recommendations(session, principal, senior_id, limit):
                 Meeting.status == "recruiting",
                 Meeting.starts_at > at,
                 Meeting.registration_closes_at > at,
-                or_(Meeting.group_id.is_(None), Group.status == "active"),
+                or_(Meeting.group_id.is_(None), Meeting.group_id.in_(accessible_groups(senior_id))),
                 count < Meeting.capacity,
                 ~already_registered,
             )

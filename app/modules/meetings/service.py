@@ -5,7 +5,7 @@ from app.db.models import Meeting
 from app.modules.groups.repository import get_group
 from app.modules.meetings.cancellation import cancel_locked_meeting
 from app.modules.meetings.registration_repository import meeting_snapshot, participant_count
-from app.modules.meetings.repository import get_meeting
+from app.modules.meetings.repository import get_meeting, require_meeting_access
 from app.modules.meetings.schemas import MeetingResponse
 
 
@@ -62,9 +62,10 @@ def create_meeting(session, principal, data, group_id=None):
         return as_response(session, meeting)
 
 
-def read_meeting(session, meeting_id):
+def read_meeting(session, meeting_id, principal):
     with session.begin():
         meeting, _ = get_meeting(session, meeting_id)
+        require_meeting_access(session, meeting, principal.senior_id)
         return as_response(session, meeting)
 
 

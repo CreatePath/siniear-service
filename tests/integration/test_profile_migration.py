@@ -86,7 +86,13 @@ def test_upgrade_preserves_profiles_registrations_and_replays(schema_engine):
         assert connection.execute(
             text("SELECT DISTINCT version, avatar_key, activity_goals FROM seniors")
         ).one() == (1, "default", [])
-        assert connection.scalar(text("SELECT count(*) FROM cards")) == 0
+        assert (
+            connection.scalar(text("SELECT count(*) FROM cards WHERE membership_id IS NULL")) == 0
+        )
+        assert (
+            connection.scalar(text("SELECT count(*) FROM cards WHERE membership_id IS NOT NULL"))
+            == 2
+        )
         assert {"calls", "care_contacts", "emergency_alerts"}.isdisjoint(
             inspect(connection).get_table_names()
         )
