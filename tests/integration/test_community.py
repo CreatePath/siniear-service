@@ -150,12 +150,11 @@ def test_deleted_parent_hides_and_blocks_every_child_operation(api, db_engine):
         assert session.get(Comment, UUID(comment["id"])).content == comment["content"]
 
 
-@pytest.mark.parametrize("actor,status", [(None, 401), ("unverified", 403)])
-def test_authentication_on_all_routes(api, actor, status):
+def test_authentication_on_all_routes(api):
     post = create_post(api)
     comment = create_comment(api, post)
     api.headers.pop("Authorization")
-    headers = auth(actor) if actor else {}
+    headers = {}
     requests = [
         ("GET", f"/api/groups/{post['group_id']}/posts", None),
         ("POST", f"/api/groups/{post['group_id']}/posts", {"title": "제목", "content": "본문"}),
@@ -168,7 +167,7 @@ def test_authentication_on_all_routes(api, actor, status):
         ("DELETE", f"/api/comments/{comment['id']}", None),
     ]
     for method, url, body in requests:
-        assert api.request(method, url, json=body, headers=headers).status_code == status
+        assert api.request(method, url, json=body, headers=headers).status_code == 401
 
 
 def test_validation_and_unknown_resources(api):

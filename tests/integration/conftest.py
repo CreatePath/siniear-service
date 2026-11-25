@@ -18,6 +18,7 @@ from scripts.seed_dev import ids, seed
 def db_engine(monkeypatch):
     if os.environ.get("RUN_DB_TESTS") != "1":
         pytest.skip("RUN_DB_TESTS=1 enables real PostgreSQL tests")
+    monkeypatch.setenv("INTERVIEW_PROVIDER", "fake")
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
     get_settings.cache_clear()

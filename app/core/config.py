@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "production"
     dev_auth_enabled: bool = False
 
+    kakao_app_id: int = Field(default=0, ge=0)
+    kakao_admin_key: SecretStr = SecretStr("")
+
     internal_inbound_token: SecretStr = SecretStr("")
     internal_outbound_token: SecretStr = SecretStr("")
     internal_peer: str = "T"

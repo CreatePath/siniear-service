@@ -64,7 +64,7 @@ def test_group_and_independent_meeting(api):
 def test_authentication_and_owner_spoofing(api):
     data = {"name": "가상 모임", "region_code": "11110"}
     assert api.post("/api/groups", json=data, headers={"Authorization": ""}).status_code == 401
-    assert api.post("/api/groups", json=data, headers=auth("unverified")).status_code == 403
+    assert api.post("/api/groups", json=data, headers=auth("unverified")).status_code == 201
     assert (
         api.post("/api/groups", json={**data, "owner_id": str(ids("other")[1])}).status_code == 422
     )

@@ -63,6 +63,7 @@ class IdempotencyRecord(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     owner_service: Mapped[str] = mapped_column(Text, default="C")
     subject_id: Mapped[str] = mapped_column(Text)
+    resource_id: Mapped[UUID | None] = mapped_column(index=True)
     operation: Mapped[str] = mapped_column(Text)
     key: Mapped[str] = mapped_column(Text)
     request_hash: Mapped[str] = mapped_column(Text)

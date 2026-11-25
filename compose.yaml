@@ -42,6 +42,8 @@ services:
       <<: *app-environment
       APP_ENV: development
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-0}
+      KAKAO_ADMIN_KEY: ${KAKAO_ADMIN_KEY:-}
       INTERNAL_INBOUND_TOKEN: ${T_TO_C_TOKEN:-}
       INTERNAL_OUTBOUND_TOKEN: ${C_TO_T_TOKEN:-}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]

@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.core.errors import DomainError
 from app.db.models.call import Call, CallEpisode, CallSchedule
-from app.db.models.identity import IdentityVerification, Senior
+from app.db.models.identity import Senior
 
 TERMINAL = {"completed", "busy", "no_answer", "failed", "canceled"}
 ACTIVE = {"queued", "initiated", "ringing", "in_progress"}
@@ -27,19 +27,7 @@ def senior_for_call(session, call_id, *, lock=False):
 
 
 def eligible(session, senior):
-    return bool(
-        senior.call_agree
-        and re.fullmatch(r"\+[1-9][0-9]{7,14}", senior.phone_number)
-        and session.scalar(
-            select(IdentityVerification.id)
-            .where(
-                IdentityVerification.user_id == senior.user_id,
-                IdentityVerification.status == "verified",
-                IdentityVerification.verified_at.is_not(None),
-            )
-            .limit(1)
-        )
-    )
+    return bool(senior.call_agree and re.fullmatch(r"\+[1-9][0-9]{7,14}", senior.phone_number))
 
 
 def require_eligible(session, senior):

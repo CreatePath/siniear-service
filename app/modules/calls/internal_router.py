@@ -61,8 +61,11 @@ def interests(
         if cached:
             return cached.response_body
         senior.interests = list(dict.fromkeys(senior.interests + data.interests))[:20]
+        senior.version += 1
         body = {"interests": senior.interests}
-        remember(session, "C", "T", "interests", idempotency_key, payload, 200, body)
+        remember(
+            session, "C", "T", "interests", idempotency_key, payload, 200, body, resource_id=call_id
+        )
         return body
 
 

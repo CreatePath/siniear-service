@@ -43,7 +43,7 @@ def deliver_one(engine, producer, send, at=None):
         row = session.scalar(
             select(OutboxMessage).where(OutboxMessage.id == row_id).with_for_update()
         )
-        if row.lease_token == token and row.state == "sending":
+        if row is not None and row.lease_token == token and row.state == "sending":
             row.state = "pending" if error else "delivered"
             row.last_error = error
             row.available_at = at + timedelta(seconds=min(300, 2 ** min(row.attempts, 8)))
