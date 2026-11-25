@@ -52,7 +52,7 @@ def test_crud_current_names_counts_and_response_fields(api, db_engine):
     assert post["comment_count"] == 0
     path = f"/api/posts/{post['id']}"
     first = create_comment(api, post, content="  댓글  ")
-    second = create_comment(api, post, author="no_consent")
+    second = create_comment(api, post, author="unverified")
     assert first["content"] == "댓글"
     assert first["created_at"] == first["updated_at"]
     assert set(first) == {
@@ -267,12 +267,12 @@ def test_keyset_order_scope_and_deleted_cursor_anchor(api, db_engine):
         assert api.get(post_path, params=params).status_code == 422
 
 
-def test_closed_group_and_no_call_consent_keep_community_permissions(api):
+def test_closed_group_keeps_community_permissions(api):
     group = create_group(api)
     assert api.patch(f"/api/groups/{group['id']}", json={"status": "closed"}).status_code == 200
-    post = create_post(api, group, author="no_consent")
-    comment = create_comment(api, post, author="no_consent")
-    assert api.get(f"/api/posts/{post['id']}", headers=auth("no_consent")).status_code == 200
+    post = create_post(api, group, author="unverified")
+    comment = create_comment(api, post, author="unverified")
+    assert api.get(f"/api/posts/{post['id']}", headers=auth("unverified")).status_code == 200
     assert api.delete(f"/api/comments/{comment['id']}").status_code == 204
 
 

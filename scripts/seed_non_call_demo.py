@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, text
+from sqlalchemy import MetaData, Table, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -18,7 +18,6 @@ from app.db.models import (
     Post,
     Registration,
     RegistrationAction,
-    Senior,
     User,
 )
 from app.db.session import get_engine
@@ -65,18 +64,19 @@ def seed(session, now=None):
     base = now.astimezone(ZoneInfo("Asia/Seoul")).replace(
         hour=10, minute=0, second=0, microsecond=0
     )
-    for index, name in enumerate(ACCOUNTS):
-        # This demo is also imported into databases at the older community revision.
+    # Older community schemas require these fields when importing a demo before upgrading.
+    seniors = Table("seniors", MetaData(), autoload_with=session.connection(), resolve_fks=False)
+    legacy_defaults = {"phone_number": "", "call_agree": False} if "call_agree" in seniors.c else {}
+    for name in ACCOUNTS:
         session.execute(User.__table__.insert().values(id=demo_id("user", name)))
         session.execute(
-            Senior.__table__.insert().values(
+            seniors.insert().values(
                 id=demo_id("senior", name),
                 user_id=demo_id("user", name),
                 name=f"테스트회원-{name}",
-                phone_number=f"+1202555011{index}",
                 region_code="11110",
                 interests=["산책", "독서"],
-                call_agree=False,
+                **legacy_defaults,
             )
         )
         if name != "unverified":
@@ -142,7 +142,6 @@ def seed(session, now=None):
                 senior_id=demo_id("senior", account),
                 status="confirmed",
                 version=1,
-                call_id=None,
             )
         )
         session.flush()
@@ -152,8 +151,6 @@ def seed(session, now=None):
                 resulting_version=1,
                 actor_senior_id=demo_id("senior", account),
                 action="register",
-                call_id=None,
-                confirmation_turn_id=None,
                 created_at=now,
             )
         )
@@ -196,10 +193,6 @@ def main():
         raise SystemExit("APP_ENV=development 또는 test에서만 실행하세요.")
     if os.environ.get("SEED_NON_CALL_DEMO") != "1":
         raise SystemExit("SEED_NON_CALL_DEMO=1을 명시해야 실행합니다.")
-    if os.environ.get("CALL_PROVIDER", "disabled") != "disabled":
-        raise SystemExit("CALL_PROVIDER=disabled로 설정하세요.")
-    if os.environ.get("ALLOW_PAID_CALLS", "false").lower() != "false":
-        raise SystemExit("ALLOW_PAID_CALLS=false로 설정하세요.")
     with Session(get_engine()) as session, session.begin():
         created = seed(session)
     print(json.dumps({"created": created, **manifest()}, ensure_ascii=False, indent=2))

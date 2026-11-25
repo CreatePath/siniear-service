@@ -127,7 +127,7 @@ def test_repeat_meeting_cancel_and_group_region_snapshot(api, db_engine):
     from app.db.models import CancellationNotice, RegistrationAction
 
     with Session(db_engine) as session:
-        assert session.scalar(select(func.count()).select_from(CancellationNotice)) == 2
+        assert session.scalar(select(func.count()).select_from(CancellationNotice)) == 1
         assert session.scalar(select(func.count()).select_from(RegistrationAction)) == 2
 
 
@@ -147,14 +147,9 @@ def test_migration_schema_and_database_constraints(api, db_engine):
                 meeting_id=UUID(meeting["id"]),
                 senior_id=ids("member")[1],
                 status="confirmed",
-                call_id=UUID(meeting["id"]),
+                version=0,
             )
         )
-    # Downgrade/upgrade is performed only inside the fixture's throwaway schema.
-    with db_engine.begin() as connection:
-        config.attributes["connection"] = connection
-        command.downgrade(config, "base")
-        command.upgrade(config, "head")
 
 
 def test_corrupt_capacity_is_not_hidden(api, db_engine):

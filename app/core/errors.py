@@ -8,17 +8,7 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 ErrorCode = Literal[
-    "ALERT_NOT_FOUND",
-    "CALL_INACTIVE",
-    "CALL_NOT_ALLOWED",
-    "CALL_NOT_FOUND",
-    "CONFIRMATION_REQUIRED",
-    "CONFIRMATION_USED",
-    "EVENT_CONFLICT",
-    "EVENT_UNVERIFIED",
-    "SCHEDULE_NOT_FOUND",
     "AUTH_REQUIRED",
-    "IDENTITY_REQUIRED",
     "PROFILE_REQUIRED",
     "PROFILE_EXISTS",
     "PROFILE_CHANGED",
@@ -28,7 +18,6 @@ ErrorCode = Literal[
     "MODEL_UNAVAILABLE",
     "CARD_NOT_FOUND",
     "CARD_CHANGED",
-    "CONTACT_NOT_FOUND",
     "KAKAO_UNAVAILABLE",
     "FORBIDDEN",
     "GROUP_NOT_FOUND",

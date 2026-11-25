@@ -6,14 +6,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import Senior, User
-from app.db.models.call import Call, CareContact, TranscriptTurn
-from app.db.models.call_runtime import CallProcessingJob, OutboxMessage
+from app.db.models import User
 from app.db.models.identity import RefreshSession
 from app.integrations import kakao
-from app.modules.calls.scheduler import tick
-from scripts.seed_dev import ids
-from tests.integration.test_calls import due, make_schedule
 from tests.integration.test_groups_meetings import create_group, meeting_data
 
 PROFILE = {
@@ -108,20 +103,6 @@ def test_member_onboarding_and_ownership(api, sign_in):
     assert api.patch(path, headers=edit_headers, json={"region_code": "B"}).json()["version"] == 2
     assert api.patch(path, headers=edit_headers, json={"name": "합성"}).status_code == 409
     assert api.get("/api/groups", headers=actor).status_code == 200
-    contacts = path + "/care-contacts"
-    data = {"name": "연락 대상", "phone_number": "+821000000001"}
-    assert (
-        api.post(contacts, headers=actor, json={**data, "phone_number": "invalid"}).status_code
-        == 422
-    )
-    contact = api.post(contacts, headers=actor, json=data).json()
-    contact_url = contacts + "/" + contact["id"]
-    assert api.get(contacts, headers=actor).json()["items"] == [contact]
-    assert api.patch(contact_url, headers=actor, json={"enabled": False}).json()["enabled"] is False
-    assert api.delete(contact_url.replace(senior["id"], str(ids("owner")[1]))).status_code == 404
-    assert api.delete(contact_url, headers=actor).status_code == 204
-    assert api.patch(contact_url, headers=actor, json={"enabled": True}).status_code == 404
-    assert api.get(contacts, headers=actor).json() == {"items": []}
 
 
 def test_expired_sessions_and_withdrawal_before_profile(api, db_engine, sign_in):
@@ -139,47 +120,6 @@ def test_expired_sessions_and_withdrawal_before_profile(api, db_engine, sign_in)
     assert api.delete("/api/users/me", headers=bearer(current["access_token"])).status_code == 204
     assert api.get("/api/users/me", headers=bearer(current["access_token"])).status_code == 401
     assert sign_in()["user_id"] != old["user_id"]
-
-
-def test_revoke_then_withdraw_with_call_data(api, db_engine):
-    at = datetime.now(UTC)
-    schedule = make_schedule(api, "unverified")
-    due(db_engine, schedule, at)
-    assert tick(db_engine, at) == 1
-    user_id, senior_id = ids("unverified")
-    actor = bearer(f"dev:{user_id}")
-    with Session(db_engine) as session, session.begin():
-        call = session.scalar(select(Call))
-        call_id = call.id
-        call.summary, call.summary_status, call.summary_created_at = "합성 요약", "completed", at
-        call.embedding, call.embedding_model_id, call.embedding_source_hash = (
-            [0.1] * 768,
-            "fake",
-            "x",
-        )
-        call.indexing_status = "completed"
-        session.add(
-            TranscriptTurn(call_id=call.id, turn_id="1", speaker="user", text="합성", offset_ms=0)
-        )
-        session.add(CallProcessingJob(call_id=call.id, input_hash="x", available_at=at))
-    with Session(db_engine) as session, session.begin():
-        session.get(Senior, senior_id).call_agree = False
-    with Session(db_engine) as session:
-        call = session.get(Call, call_id)
-        assert call.summary and call.embedding is None
-        assert session.get(CallProcessingJob, call_id).state == "canceled"
-        assert session.get(TranscriptTurn, (call_id, "1")) is not None
-    assert api.delete("/api/users/me", headers=actor).status_code == 204
-    assert api.get("/api/users/me", headers=actor).status_code == 401
-    with Session(db_engine) as session:
-        for model in (Call, OutboxMessage, TranscriptTurn, CallProcessingJob):
-            assert session.scalar(select(func.count()).select_from(model)) == 0
-        assert (
-            session.scalar(select(CareContact.id).where(CareContact.senior_id == senior_id)) is None
-        )
-        senior = session.get(Senior, senior_id)
-        assert not senior.phone_number and not senior.interests and not senior.call_agree
-        assert session.get(Senior, ids("owner")[1]).phone_number
 
 
 def test_unlink_failure_rolls_back_and_retry_only_erases_owner(api, sign_in, monkeypatch):

@@ -5,7 +5,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    ForeignKeyConstraint,
     Index,
     Text,
     UniqueConstraint,
@@ -31,7 +30,6 @@ class Registration(Base):
     senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     status: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(default=1)
-    call_id: Mapped[UUID | None] = mapped_column(ForeignKey("calls.id"))
 
 
 class RegistrationAction(Base):
@@ -39,12 +37,6 @@ class RegistrationAction(Base):
     __table_args__ = (
         CheckConstraint("action IN ('register','cancel')", name="action"),
         CheckConstraint("resulting_version >= 1", name="version"),
-        CheckConstraint("(call_id IS NULL) = (confirmation_turn_id IS NULL)", name="phone_pair"),
-        ForeignKeyConstraint(
-            [("call_id"), ("confirmation_turn_id")],
-            [("transcript_turns.call_id"), ("transcript_turns.turn_id")],
-        ),
-        UniqueConstraint("call_id", "confirmation_turn_id"),
     )
     registration_id: Mapped[UUID] = mapped_column(
         ForeignKey("meeting_registrations.id"), primary_key=True
@@ -52,8 +44,6 @@ class RegistrationAction(Base):
     resulting_version: Mapped[int] = mapped_column(primary_key=True)
     actor_senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     action: Mapped[str] = mapped_column(Text)
-    call_id: Mapped[UUID | None] = mapped_column(ForeignKey("calls.id"))
-    confirmation_turn_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -73,12 +63,12 @@ class IdempotencyRecord(Base):
 
 
 class CancellationNotice(Base):
-    """P9 전달용 대기. 발송 성공이나 사용자 확인을 의미하지 않는다."""
+    """일정 취소 안내 대기. 발송 성공이나 사용자 확인을 의미하지 않는다."""
 
     __tablename__ = "cancellation_notices"
     __table_args__ = (
         UniqueConstraint("meeting_id", "recipient_senior_id", "kind"),
-        CheckConstraint("kind IN ('meeting_canceled','organizer_phone_guidance')", name="kind"),
+        CheckConstraint("kind = 'meeting_canceled'", name="kind"),
         CheckConstraint("state = 'pending'", name="pending_only"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

@@ -59,9 +59,8 @@ def test_registration_races_with_manager_change(api, db_engine, change):
         if change == "cancel":
             assert row.status == "canceled"
             assert count == 0
-            assert (
-                session.scalar(select(func.count()).select_from(CancellationNotice))
-                == len(registrations) + 1
+            assert session.scalar(select(func.count()).select_from(CancellationNotice)) == len(
+                registrations
             )
         elif change == "close":
             assert row.status == "closed"

@@ -39,22 +39,18 @@ def registration_response(session, registration):
         senior_id=registration.senior_id,
         status=registration.status,
         version=registration.version,
-        source="phone" if registration.call_id else "app",
-        call_id=registration.call_id,
         created_at=first.created_at,
         updated_at=current.created_at,
     )
 
 
-def record_action(session, registration, actor_id, action, phone=None):
+def record_action(session, registration, actor_id, action):
     session.add(
         RegistrationAction(
             registration_id=registration.id,
             resulting_version=registration.version,
             actor_senior_id=actor_id,
             action=action,
-            call_id=phone["call_id"] if phone else None,
-            confirmation_turn_id=phone["confirmation_turn_id"] if phone else None,
             created_at=datetime.now(UTC),
         )
     )

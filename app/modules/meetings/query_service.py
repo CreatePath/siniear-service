@@ -1,5 +1,3 @@
-from contextlib import nullcontext
-
 from sqlalchemy import case, func, or_, select
 
 from app.core.errors import DomainError
@@ -34,7 +32,7 @@ def list_meetings(session, *, group_id, region_code, from_time, to_time, status,
         "to": to_time,
         "status": status,
     }
-    with session.begin() if not session.in_transaction() else nullcontext():
+    with session.begin():
         query = select(Meeting)
         if group_id:
             query = query.where(Meeting.group_id == group_id)
@@ -58,13 +56,9 @@ def list_meetings(session, *, group_id, region_code, from_time, to_time, status,
         return Page(items=[as_response(session, row) for row in rows], next_cursor=next_cursor)
 
 
-def recommendations(
-    session, principal, senior_id, limit, interests=None, from_time=None, to_time=None
-):
-    if from_time and to_time and from_time >= to_time:
-        raise DomainError(422, "INVALID_TIME_RANGE", "?? ??? ??? ???.")
+def recommendations(session, principal, senior_id, limit):
     require_owner(senior_id, principal)
-    with session.begin() if not session.in_transaction() else nullcontext():
+    with session.begin():
         senior = session.get(Senior, senior_id)
         if senior is None:
             raise DomainError(404, "SENIOR_NOT_FOUND", "회원 정보를 찾을 수 없습니다.")
@@ -88,7 +82,7 @@ def recommendations(
         score = sum(
             (
                 case((Group.interests.contains([interest]), 1), else_=0)
-                for interest in set(interests if interests is not None else senior.interests)
+                for interest in set(senior.interests)
             ),
             start=0,
         )
@@ -105,12 +99,8 @@ def recommendations(
                 ~already_registered,
             )
         )
-        if interests or senior.interests:
+        if senior.interests:
             query = query.order_by(score.desc())
-        if from_time:
-            query = query.where(Meeting.starts_at >= from_time)
-        if to_time:
-            query = query.where(Meeting.starts_at < to_time)
         rows = session.scalars(query.order_by(Meeting.starts_at, Meeting.id).limit(limit)).all()
         return {"items": [as_response(session, row) for row in rows]}
 
@@ -124,10 +114,8 @@ def list_registrations(
     status=None,
     limit=20,
     cursor=None,
-    from_time=None,
-    to_time=None,
 ):
-    with session.begin() if not session.in_transaction() else nullcontext():
+    with session.begin():
         if senior_id:
             require_owner(senior_id, principal)
         else:
@@ -141,12 +129,6 @@ def list_registrations(
         )
         if status:
             query = query.where(Registration.status == status)
-        if from_time or to_time:
-            query = query.join(Meeting, Registration.meeting_id == Meeting.id)
-            if from_time:
-                query = query.where(Meeting.starts_at >= from_time)
-            if to_time:
-                query = query.where(Meeting.starts_at < to_time)
         rows, next_cursor = paginate(
             session,
             query,
@@ -156,8 +138,9 @@ def list_registrations(
             cursor=cursor,
             scope={
                 "resource": "registrations",
-                "from": from_time,
-                "to": to_time,
+                # Keep the scope of existing app cursors.
+                "from": None,
+                "to": None,
                 "actor": principal.senior_id,
                 "senior_id": senior_id,
                 "meeting_id": meeting_id,

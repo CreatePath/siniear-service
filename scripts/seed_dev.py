@@ -1,4 +1,4 @@
-"""합성 계정만 추가한다. 기존 동의·프로필·인증 결과는 수정하지 않는다."""
+"""합성 계정만 추가한다. 기존 프로필·인증 결과는 수정하지 않는다."""
 
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, uuid5
@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.db.models import IdentityVerification, Senior, User
 from app.db.session import get_engine
 
-ACCOUNTS = ("owner", "member", "other", "unverified", "no_consent")
+ACCOUNTS = ("owner", "member", "other", "unverified")
 
 
 def ids(name):
@@ -32,10 +32,8 @@ def seed(session):
                 id=senior_id,
                 user_id=user_id,
                 name=f"가상회원{index + 1}",
-                phone_number=f"+1202555010{index}",
                 region_code="11110",
                 interests=["산책", "독서"],
-                call_agree=name != "no_consent",
             )
         )
         if name != "unverified":

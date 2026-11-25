@@ -68,7 +68,6 @@ def test_authentication_and_owner_spoofing(api):
     assert (
         api.post("/api/groups", json={**data, "owner_id": str(ids("other")[1])}).status_code == 422
     )
-    assert api.post("/api/groups", json=data, headers=auth("no_consent")).status_code == 201
 
 
 @pytest.mark.parametrize(
@@ -90,8 +89,8 @@ def test_meeting_validation(api, changes):
 
 def test_seed_preserves_existing_data(db_engine):
     with Session(db_engine) as session, session.begin():
-        session.get(Senior, ids("owner")[1]).call_agree = False
+        session.get(Senior, ids("owner")[1]).interests = ["목공"]
     with Session(db_engine) as session, session.begin():
         seed(session)
-        assert session.scalar(select(func.count()).select_from(User)) == 5
-        assert session.get(Senior, ids("owner")[1]).call_agree is False
+        assert session.scalar(select(func.count()).select_from(User)) == 4
+        assert session.get(Senior, ids("owner")[1]).interests == ["목공"]

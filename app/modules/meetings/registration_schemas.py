@@ -13,8 +13,6 @@ class RegistrationResponse(BaseModel):
     senior_id: UUID
     status: Literal["confirmed", "canceled"]
     version: int
-    source: Literal["app", "phone"]
-    call_id: UUID | None
     created_at: datetime
     updated_at: datetime
 

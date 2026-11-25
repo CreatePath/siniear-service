@@ -67,7 +67,6 @@ def test_seed_preserves_edits_cancellation_and_deleted_comment(demo_engine):
         assert session.get(Meeting, demo.demo_id("meeting", "walk")).starts_at == first_time
         assert session.scalar(select(func.count()).select_from(User)) == 4
         assert session.scalar(select(func.count()).select_from(Post)) == 3
-        assert not any(session.scalars(select(Senior.call_agree)))
 
 
 def test_seed_rolls_back_all_data_on_late_failure(demo_engine, monkeypatch):
@@ -155,19 +154,12 @@ def test_demo_accounts_support_non_call_api_workflow(demo_engine):
 
 
 @pytest.mark.parametrize(
-    ("app_env", "opt_in", "provider", "paid"),
-    [
-        ("production", "1", "disabled", "false"),
-        ("test", "0", "disabled", "false"),
-        ("test", "1", "twilio", "false"),
-        ("test", "1", "disabled", "true"),
-    ],
+    ("app_env", "opt_in"),
+    [("production", "1"), ("test", "0")],
 )
-def test_cli_guard_before_database(monkeypatch, app_env, opt_in, provider, paid):
+def test_cli_guard_before_database(monkeypatch, app_env, opt_in):
     monkeypatch.setattr(demo, "get_settings", lambda: SimpleNamespace(app_env=app_env))
     monkeypatch.setenv("SEED_NON_CALL_DEMO", opt_in)
-    monkeypatch.setenv("CALL_PROVIDER", provider)
-    monkeypatch.setenv("ALLOW_PAID_CALLS", paid)
 
     def fail():
         pytest.fail("guard must reject before accessing the DB")

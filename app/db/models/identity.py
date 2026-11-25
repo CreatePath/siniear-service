@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import ARRAY, BigInteger, Boolean, DateTime, ForeignKey, Text, func
+from sqlalchemy import ARRAY, BigInteger, DateTime, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -41,10 +41,8 @@ class Senior(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), unique=True)
     name: Mapped[str] = mapped_column(Text)
-    phone_number: Mapped[str | None] = mapped_column(Text)
     region_code: Mapped[str] = mapped_column(Text)
     interests: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
-    call_agree: Mapped[bool] = mapped_column(Boolean, server_default="false")
     version: Mapped[int] = mapped_column(server_default="1")
     avatar_key: Mapped[str] = mapped_column(Text, server_default="default")
     photo_id: Mapped[UUID | None] = mapped_column(ForeignKey("media_assets.id"))

@@ -15,7 +15,7 @@ from scripts.seed_dev import ids, seed
 
 
 @pytest.fixture
-def db_engine(monkeypatch):
+def schema_engine(monkeypatch):
     if os.environ.get("RUN_DB_TESTS") != "1":
         pytest.skip("RUN_DB_TESTS=1 enables real PostgreSQL tests")
     monkeypatch.setenv("INTERVIEW_PROVIDER", "fake")
@@ -32,12 +32,6 @@ def db_engine(monkeypatch):
         connect_args={"options": f"-csearch_path={schema} -clock_timeout=5000"},
     )
     try:
-        with engine.begin() as connection:
-            config = Config("alembic.ini")
-            config.attributes["connection"] = connection
-            command.upgrade(config, "head")
-        with Session(engine) as session, session.begin():
-            seed(session)
         yield engine
     finally:
         engine.dispose()
@@ -46,6 +40,17 @@ def db_engine(monkeypatch):
             connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         admin.dispose()
         get_settings.cache_clear()
+
+
+@pytest.fixture
+def db_engine(schema_engine):
+    with schema_engine.begin() as connection:
+        config = Config("alembic.ini")
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
+    with Session(schema_engine) as session, session.begin():
+        seed(session)
+    return schema_engine
 
 
 @pytest.fixture

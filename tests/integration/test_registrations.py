@@ -34,6 +34,7 @@ def test_idempotency_cancel_reregister(api, db_engine):
     first = signup(api, meeting)
     assert first.status_code == 201, first.text
     registration = first.json()
+    assert {"source", "call_id"}.isdisjoint(registration)
     assert signup(api, meeting).json() == registration
     duplicate = signup(api, meeting, key="request-2")
     assert duplicate.status_code == 200
@@ -109,7 +110,7 @@ def test_group_closure_preserves_completed_history(api, db_engine):
             )
             == "canceled"
         )
-        assert session.scalar(select(func.count()).select_from(CancellationNotice)) == 2
+        assert session.scalar(select(func.count()).select_from(CancellationNotice)) == 1
         assert session.scalar(select(func.count()).select_from(RegistrationAction)) == 3
 
 
