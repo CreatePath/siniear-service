@@ -20,7 +20,7 @@ def create(data: IndependentMeetingCreate, actor: Actor, session: Database):
 
 @router.get("/meetings/{meeting_id}", response_model=MeetingResponse)
 def detail(meeting_id: UUID, actor: Actor, session: Database):
-    return service.read_meeting(session, meeting_id)
+    return service.read_meeting(session, meeting_id, actor)
 
 
 @router.patch("/meetings/{meeting_id}", response_model=MeetingResponse)

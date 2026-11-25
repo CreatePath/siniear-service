@@ -19,6 +19,10 @@ class Group(Base):
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text, default="")
     region_code: Mapped[str] = mapped_column(Text)
+    badge_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL")
+    )
+    activity_goals: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
     interests: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -80,10 +84,16 @@ class Comment(Base):
     __tablename__ = "comments"
     __table_args__ = (
         CheckConstraint("length(trim(content)) BETWEEN 1 AND 1000", name="content_length"),
+        Index("ix_comments_parent_created", "parent_comment_id", "created_at", "id"),
+        Index("ix_comments_meeting_created", "meeting_id", "created_at", "id"),
         Index("ix_comments_post_created", "post_id", "created_at", "id"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    post_id: Mapped[UUID] = mapped_column(ForeignKey("posts.id"))
+    meeting_id: Mapped[UUID | None] = mapped_column(ForeignKey("meetings.id"))
+    parent_comment_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE")
+    )
+    post_id: Mapped[UUID | None] = mapped_column(ForeignKey("posts.id"))
     author_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

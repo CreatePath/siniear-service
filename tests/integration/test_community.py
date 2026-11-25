@@ -52,12 +52,15 @@ def test_crud_current_names_counts_and_response_fields(api, db_engine):
     assert post["comment_count"] == 0
     path = f"/api/posts/{post['id']}"
     first = create_comment(api, post, content="  댓글  ")
-    second = create_comment(api, post, author="no_consent")
+    second = create_comment(api, post, author="unverified")
     assert first["content"] == "댓글"
     assert first["created_at"] == first["updated_at"]
     assert set(first) == {
         "id",
         "post_id",
+        "meeting_id",
+        "parent_comment_id",
+        "reply_count",
         "author_id",
         "author_name",
         "content",
@@ -76,8 +79,8 @@ def test_crud_current_names_counts_and_response_fields(api, db_engine):
     assert response.status_code == 200
     assert response.json()["updated_at"] > first["updated_at"]
     with Session(db_engine) as session, session.begin():
-        session.get(Senior, ids("member")[1]).name = "가상 새 작성자"
-        session.get(Senior, ids("other")[1]).name = "가상 새 댓글자"
+        session.get(Senior, ids("member")[1]).nickname = "가상 새 작성자"
+        session.get(Senior, ids("other")[1]).nickname = "가상 새 댓글자"
     detail = api.get(path).json()
     assert detail["author_name"] == "가상 새 작성자"
     listing = api.get(f"/api/groups/{post['group_id']}/posts").json()["items"]
@@ -150,12 +153,11 @@ def test_deleted_parent_hides_and_blocks_every_child_operation(api, db_engine):
         assert session.get(Comment, UUID(comment["id"])).content == comment["content"]
 
 
-@pytest.mark.parametrize("actor,status", [(None, 401), ("unverified", 403)])
-def test_authentication_on_all_routes(api, actor, status):
+def test_authentication_on_all_routes(api):
     post = create_post(api)
     comment = create_comment(api, post)
     api.headers.pop("Authorization")
-    headers = auth(actor) if actor else {}
+    headers = {}
     requests = [
         ("GET", f"/api/groups/{post['group_id']}/posts", None),
         ("POST", f"/api/groups/{post['group_id']}/posts", {"title": "제목", "content": "본문"}),
@@ -168,7 +170,7 @@ def test_authentication_on_all_routes(api, actor, status):
         ("DELETE", f"/api/comments/{comment['id']}", None),
     ]
     for method, url, body in requests:
-        assert api.request(method, url, json=body, headers=headers).status_code == status
+        assert api.request(method, url, json=body, headers=headers).status_code == 401
 
 
 def test_validation_and_unknown_resources(api):
@@ -268,12 +270,12 @@ def test_keyset_order_scope_and_deleted_cursor_anchor(api, db_engine):
         assert api.get(post_path, params=params).status_code == 422
 
 
-def test_closed_group_and_no_call_consent_keep_community_permissions(api):
+def test_closed_group_keeps_community_permissions(api):
     group = create_group(api)
     assert api.patch(f"/api/groups/{group['id']}", json={"status": "closed"}).status_code == 200
-    post = create_post(api, group, author="no_consent")
-    comment = create_comment(api, post, author="no_consent")
-    assert api.get(f"/api/posts/{post['id']}", headers=auth("no_consent")).status_code == 200
+    post = create_post(api, group, author="unverified")
+    comment = create_comment(api, post, author="unverified")
+    assert api.get(f"/api/posts/{post['id']}", headers=auth("unverified")).status_code == 200
     assert api.delete(f"/api/comments/{comment['id']}").status_code == 204
 
 

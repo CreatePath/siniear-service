@@ -10,6 +10,8 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "sqlalchemy>=2.0,<3",
     "alembic>=1.14,<2",
+    "pillow>=11",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]

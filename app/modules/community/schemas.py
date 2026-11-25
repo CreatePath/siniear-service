@@ -42,7 +42,10 @@ class PostResponse(BaseModel):
 
 class CommentResponse(BaseModel):
     id: UUID
-    post_id: UUID
+    meeting_id: UUID | None
+    parent_comment_id: UUID | None
+    reply_count: int
+    post_id: UUID | None
     author_id: UUID
     author_name: str
     content: str

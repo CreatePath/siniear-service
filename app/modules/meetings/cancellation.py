@@ -33,17 +33,6 @@ def cancel_locked_meeting(session, meeting, actor_id, reason):
                 payload=payload,
             )
         )
-    session.add(
-        CancellationNotice(
-            meeting_id=meeting.id,
-            recipient_senior_id=meeting.owner_id,
-            kind="organizer_phone_guidance",
-            payload={
-                **payload,
-                "message": "스마트폰을 사용하지 않는 신청자에게는 직접 전화로 취소를 알려 주세요.",
-            },
-        )
-    )
 
 
 def cancel_group_meetings(session, group_id, actor_id, at):

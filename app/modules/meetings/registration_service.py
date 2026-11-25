@@ -1,53 +1,40 @@
 import hashlib
-from contextlib import nullcontext
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.core.errors import DomainError
+from app.core.idempotency import lock_key
 from app.db.models import IdempotencyRecord, Registration
 from app.modules.meetings.registration_repository import (
     participant_count,
     record_action,
     registration_response,
 )
-from app.modules.meetings.repository import get_meeting
+from app.modules.meetings.repository import get_meeting, require_meeting_access
 from app.modules.meetings.service import effective_status, now, require_active
 
 OPERATION = "meeting.register"
 
 
-def register(session, principal, meeting_id, key, phone=None):
-    operation = "phone.register" if phone else OPERATION
-    with session.begin() if not session.in_transaction() else nullcontext():
+def register(session, principal, meeting_id, key):
+    with session.begin():
         subject = str(principal.senior_id)
-        digest = hashlib.sha256(f"C:{subject}:{operation}:{key}".encode()).digest()
-        # Across processes: same subject/operation/key waits for the committed result.
-        lock_id = int.from_bytes(digest[:8], "big", signed=True)
-        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_id})
-        from app.core.idempotency import fingerprint
-
-        request_hash = (
-            fingerprint({"meeting_id": meeting_id, "phone": phone})
-            if phone
-            else hashlib.sha256(str(meeting_id).encode()).hexdigest()
-        )
+        lock_key(session, f"C:{subject}:{OPERATION}:{key}")
+        request_hash = hashlib.sha256(str(meeting_id).encode()).hexdigest()
         cached = session.scalar(
             select(IdempotencyRecord).where(
                 IdempotencyRecord.owner_service == "C",
                 IdempotencyRecord.subject_id == subject,
-                IdempotencyRecord.operation == operation,
+                IdempotencyRecord.operation == OPERATION,
                 IdempotencyRecord.key == key,
             )
         )
+        meeting, group = get_meeting(session, meeting_id, lock=True)
+        require_meeting_access(session, meeting, principal.senior_id)
         if cached:
             if cached.request_hash != request_hash:
                 raise DomainError(409, "IDEMPOTENCY_CONFLICT", "같은 키의 요청 대상이 다릅니다.")
             return cached.http_status, cached.response_body
-        if phone:
-            from app.modules.meetings.phone_service import validate_confirmation
-
-            validate_confirmation(session, principal, phone, meeting_id, "register")
-        meeting, group = get_meeting(session, meeting_id, lock=True)
         registration = session.scalar(
             select(Registration).where(
                 Registration.meeting_id == meeting_id, Registration.senior_id == principal.senior_id
@@ -67,19 +54,18 @@ def register(session, principal, meeting_id, key, phone=None):
                     senior_id=principal.senior_id,
                     status="confirmed",
                     version=1,
-                    call_id=phone["call_id"] if phone else None,
                 )
                 session.add(registration)
             else:
                 registration.status = "confirmed"
                 registration.version += 1
             session.flush()
-            record_action(session, registration, principal.senior_id, "register", phone)
+            record_action(session, registration, principal.senior_id, "register")
         body = registration_response(session, registration).model_dump(mode="json")
         session.add(
             IdempotencyRecord(
                 subject_id=subject,
-                operation=operation,
+                operation=OPERATION,
                 key=key,
                 request_hash=request_hash,
                 http_status=status,
@@ -89,10 +75,8 @@ def register(session, principal, meeting_id, key, phone=None):
         return status, body
 
 
-def cancel_registration(
-    session, principal, meeting_id, registration_id, expected_version, phone=None
-):
-    with session.begin() if not session.in_transaction() else nullcontext():
+def cancel_registration(session, principal, meeting_id, registration_id, expected_version):
+    with session.begin():
         meeting, group = get_meeting(session, meeting_id, lock=True)
         registration = session.scalar(
             select(Registration)
@@ -101,8 +85,6 @@ def cancel_registration(
         )
         if registration is None:
             raise DomainError(404, "REGISTRATION_NOT_FOUND", "신청을 찾을 수 없습니다.")
-        if phone and principal.senior_id != registration.senior_id:
-            raise DomainError(403, "FORBIDDEN", "??? ??? ??? ? ????.")
         owner_id = group.owner_id if group else meeting.owner_id
         if principal.senior_id not in {registration.senior_id, owner_id}:
             raise DomainError(403, "FORBIDDEN", "신청 취소 권한이 없습니다.")
@@ -116,4 +98,4 @@ def cancel_registration(
             raise DomainError(409, "CANCELLATION_CLOSED", "일정 시작 후에는 취소할 수 없습니다.")
         registration.status = "canceled"
         registration.version += 1
-        record_action(session, registration, principal.senior_id, "cancel", phone)
+        record_action(session, registration, principal.senior_id, "cancel")

@@ -48,3 +48,20 @@ def test_required_headers_body_and_openapi(api):
     )
     assert post["security"] == [{"HTTPBearer": []}]
     assert "requestBody" not in post
+
+
+def test_retired_routes_are_absent(api):
+    paths = api.get("/api/openapi.json").json()["paths"]
+    retired = {"care-contacts", "call-schedules", "calls", "alerts", "internal"}
+    assert all(retired.isdisjoint(path.split("/")) for path in paths)
+    senior = ids("member")[1]
+    for method, path in (
+        ("GET", f"/api/seniors/{senior}/care-contacts"),
+        ("POST", f"/api/seniors/{senior}/care-contacts"),
+        ("PATCH", f"/api/seniors/{senior}/care-contacts/{senior}"),
+        ("DELETE", f"/api/seniors/{senior}/care-contacts/{senior}"),
+        ("POST", f"/api/seniors/{senior}/call-schedules"),
+        ("GET", f"/api/seniors/{senior}/alerts"),
+        ("POST", f"/api/internal/calls/{senior}/registrations"),
+    ):
+        assert api.request(method, path).status_code == 404

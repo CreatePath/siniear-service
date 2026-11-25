@@ -1,9 +1,8 @@
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Response
 
-from app.api.dependencies import Actor, Database
+from app.api.dependencies import Actor, Cursor, Database, Key, Limit
 from app.core.errors import API_ERRORS
 from app.core.schemas import Page
 from app.modules.community import service
@@ -16,8 +15,6 @@ from app.modules.community.schemas import (
 )
 
 router = APIRouter(tags=["community"], responses=API_ERRORS)
-Limit = Annotated[int, Query(ge=1, le=100)]
-Cursor = Annotated[str | None, Query(max_length=2048)]
 
 
 @router.get("/groups/{group_id}/posts", response_model=Page[PostResponse])
@@ -69,3 +66,31 @@ def update_comment(comment_id: UUID, data: CommentWrite, actor: Actor, session: 
 def delete_comment(comment_id: UUID, actor: Actor, session: Database):
     service.delete_comment(session, actor, comment_id)
     return Response(status_code=204)
+
+
+@router.get("/meetings/{meeting_id}/comments")
+def meeting_comments(
+    meeting_id: UUID, actor: Actor, session: Database, limit: Limit = 20, cursor: Cursor = None
+) -> Page[CommentResponse]:
+    return service.thread_page(session, actor, limit, cursor, meeting_id=meeting_id)
+
+
+@router.post("/meetings/{meeting_id}/comments", status_code=201)
+def add_meeting_comment(
+    meeting_id: UUID, data: CommentWrite, key: Key, actor: Actor, session: Database
+) -> CommentResponse:
+    return service.write_thread(session, actor, data, key, meeting_id=meeting_id)
+
+
+@router.get("/comments/{comment_id}/replies")
+def replies(
+    comment_id: UUID, actor: Actor, session: Database, limit: Limit = 20, cursor: Cursor = None
+) -> Page[CommentResponse]:
+    return service.thread_page(session, actor, limit, cursor, parent_id=comment_id)
+
+
+@router.post("/comments/{comment_id}/replies", status_code=201)
+def add_reply(
+    comment_id: UUID, data: CommentWrite, key: Key, actor: Actor, session: Database
+) -> CommentResponse:
+    return service.write_thread(session, actor, data, key, parent_id=comment_id)

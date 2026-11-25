@@ -17,12 +17,12 @@ class Settings(BaseSettings):
     db_password: SecretStr = Field(min_length=1)
     app_env: Literal["development", "test", "production"] = "production"
     dev_auth_enabled: bool = False
+    interview_provider: Literal["fake", "gemini"] = "fake"
+    gemini_api_key: SecretStr | None = None
+    gemini_interview_model: str = Field(default="", pattern=r"^[a-zA-Z0-9._-]*$")
 
-    internal_inbound_token: SecretStr = SecretStr("")
-    internal_outbound_token: SecretStr = SecretStr("")
-    internal_peer: str = "T"
-    internal_scopes: str = "calls:events meetings:read meetings:write interests:write alerts:read"
-    peer_base_url: str = "http://call:8000"
+    kakao_app_id: int = Field(default=0, ge=0)
+    kakao_admin_key: SecretStr = SecretStr("")
 
     @model_validator(mode="after")
     def guard_dev_auth(self):

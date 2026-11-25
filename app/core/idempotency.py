@@ -35,11 +35,12 @@ def replay(session, owner, subject, operation, key, payload):
     return row
 
 
-def remember(session, owner, subject, operation, key, payload, status, body):
+def remember(session, owner, subject, operation, key, payload, status, body, *, resource_id=None):
     session.add(
         IdempotencyRecord(
             owner_service=owner,
             subject_id=subject,
+            resource_id=resource_id,
             operation=operation,
             key=key,
             request_hash=fingerprint(payload),

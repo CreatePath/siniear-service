@@ -12,6 +12,7 @@ def test_production_rejects_development_auth():
     assert "test-only" not in str(error.value)
 
 
-def test_development_auth_is_explicit_opt_in():
+def test_development_auth_is_explicit_opt_in(monkeypatch):
+    monkeypatch.delenv("DEV_AUTH_ENABLED", raising=False)
     settings = Settings(_env_file=None, db_password="test-only", app_env="development")
     assert settings.dev_auth_enabled is False

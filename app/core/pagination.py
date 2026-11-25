@@ -10,7 +10,17 @@ from app.core.errors import DomainError
 
 
 def paginate(
-    session, query, *, column, id_column, limit, cursor, scope, descending=False, value_for_row=None
+    session,
+    query,
+    *,
+    column,
+    id_column,
+    limit,
+    cursor,
+    scope,
+    descending=False,
+    value_for_row=None,
+    mappings=False,
 ):
     scope_hash = hashlib.sha256(json.dumps(scope, sort_keys=True, default=str).encode()).hexdigest()
     if cursor:
@@ -36,7 +46,8 @@ def paginate(
             position < (value, row_id) if descending else position > (value, row_id)
         )
     order = (column.desc(), id_column.desc()) if descending else (column.asc(), id_column.asc())
-    rows = session.scalars(query.order_by(*order).limit(limit + 1)).all()
+    result = session.execute(query.order_by(*order).limit(limit + 1))
+    rows = result.all() if mappings else result.scalars().all()
     next_cursor = None
     if len(rows) > limit:
         last = rows[limit - 1]
@@ -45,7 +56,7 @@ def paginate(
             json.dumps(
                 {
                     "scope": scope_hash,
-                    "id": str(last.id),
+                    "id": str(getattr(last, id_column.key) if mappings else last.id),
                     "value": value.isoformat() if isinstance(value, datetime) else str(value),
                 }
             ).encode()

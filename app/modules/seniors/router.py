@@ -1,0 +1,64 @@
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+
+from app.api.dependencies import Actor, Database
+from app.core.errors import API_ERRORS, DomainError
+from app.db.models.identity import Senior, User
+from app.modules.auth.dependencies import Member
+from app.modules.auth.service import unauthorized
+from app.modules.meetings.service import require_owner
+from app.modules.seniors.profile import (
+    Profile,
+    ProfileCreate,
+    ProfilePatch,
+    VersionHeader,
+    check_name,
+    check_photo,
+    edit_profile,
+)
+
+router = APIRouter(tags=["seniors"], responses=API_ERRORS)
+
+
+def own_senior(senior_id: UUID, actor: Actor):
+    require_owner(senior_id, actor)
+    return senior_id
+
+
+OwnerId = Annotated[UUID, Depends(own_senior)]
+
+
+@router.post("/seniors", status_code=201)
+def create_profile(data: ProfileCreate, account: Member, session: Database) -> Profile:
+    with session.begin():
+        user = session.scalar(select(User).where(User.id == account.user_id).with_for_update())
+        if user is None or user.withdrawn_at:
+            raise unauthorized()
+        if session.scalar(select(Senior.id).where(Senior.user_id == user.id)):
+            raise DomainError(409, "PROFILE_EXISTS", "이미 프로필이 등록되어 있습니다.")
+        check_name(data.card_name_mode, None)
+        check_photo(session, user.id, data.photo_id)
+        senior = Senior(user_id=user.id, **data.model_dump())
+        session.add(senior)
+        session.flush()
+        return Profile.model_validate(senior)
+
+
+@router.get("/seniors/{senior_id}")
+def profile(senior_id: OwnerId, session: Database) -> Profile:
+    with session.begin():
+        return Profile.model_validate(session.get(Senior, senior_id))
+
+
+@router.patch("/seniors/{senior_id}")
+def update_profile(
+    senior_id: OwnerId, data: ProfilePatch, if_match: VersionHeader, session: Database
+) -> Profile:
+    with session.begin():
+        senior = session.get(Senior, senior_id, with_for_update=True)
+        edit_profile(session, senior, data, int(if_match[1:-1]))
+        session.flush()
+        return Profile.model_validate(senior)

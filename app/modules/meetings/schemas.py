@@ -67,5 +67,6 @@ class MeetingResponse(BaseModel):
     capacity: int
     registration_closes_at: AwareDatetime
     status: MeetingStatus
+    comment_count: int = 0
     participant_count: int = 0
     remaining_capacity: int = 0

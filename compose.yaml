@@ -1,20 +1,5 @@
 name: siniear
 
-x-app-environment: &app-environment
-  DB_HOST: db
-  DB_PORT: 5432
-  DB_NAME: ${DB_NAME:-siniear}
-  DB_USER: ${DB_USER:-siniear}
-  DB_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
-  WATCHFILES_FORCE_POLLING: "true"
-
-x-app-healthcheck: &app-healthcheck
-  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=7)"]
-  interval: 15s
-  timeout: 8s
-  retries: 3
-  start_period: 20s
-
 services:
   db:
     image: postgres:17-bookworm
@@ -39,11 +24,19 @@ services:
       context: .
       target: development
     environment:
-      <<: *app-environment
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-siniear}
+      DB_USER: ${DB_USER:-siniear}
+      DB_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+      WATCHFILES_FORCE_POLLING: "true"
       APP_ENV: development
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
-      INTERNAL_INBOUND_TOKEN: ${T_TO_C_TOKEN:-}
-      INTERNAL_OUTBOUND_TOKEN: ${C_TO_T_TOKEN:-}
+      INTERVIEW_PROVIDER: ${INTERVIEW_PROVIDER:-fake}
+      GEMINI_INTERVIEW_MODEL: ${GEMINI_INTERVIEW_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-0}
+      KAKAO_ADMIN_KEY: ${KAKAO_ADMIN_KEY:-}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
     ports:
       - "127.0.0.1:${SERVICE_PORT:-8000}:8000"
@@ -57,44 +50,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    healthcheck: *app-healthcheck
-    init: true
-    logging:
-      driver: local
-
-  call:
-    build:
-      context: ../siniear-call
-      target: development
-    environment:
-      <<: *app-environment
-      APP_ENV: development
-      INTERNAL_INBOUND_TOKEN: ${C_TO_T_TOKEN:-}
-      INTERNAL_OUTBOUND_TOKEN: ${T_TO_C_TOKEN:-}
-      CALL_PROVIDER: ${CALL_PROVIDER:-disabled}
-      ALLOW_PAID_CALLS: ${ALLOW_PAID_CALLS:-false}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
-      KOREAAITEL_ACCOUNT_ID: ${KOREAAITEL_ACCOUNT_ID:-}
-      KOREAAITEL_API_KEY: ${KOREAAITEL_API_KEY:-}
-      KOREAAITEL_SIGNING_KEY: ${KOREAAITEL_SIGNING_KEY:-}
-      KOREAAITEL_FROM_NUMBER: ${KOREAAITEL_FROM_NUMBER:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-}
-      GEMINI_SUMMARY_MODEL: ${GEMINI_SUMMARY_MODEL:-}
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
-    ports:
-      - "127.0.0.1:${CALL_PORT:-8001}:8000"
-    volumes:
-      - ../siniear-call/app:/app/app
-      - ../siniear-call/tests:/app/tests
-      - ./app:/service/app:ro
-      - ./migrations:/schema/migrations:ro
-      - ./alembic.ini:/schema/alembic.ini:ro
-      - ../siniear-call/pyproject.toml:/app/pyproject.toml:ro
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck: *app-healthcheck
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=7)"]
+      interval: 15s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
     init: true
     logging:
       driver: local
