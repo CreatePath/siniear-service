@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.health import router as health_router
 from app.modules.auth.router import router as auth_router
+from app.modules.cards.exchanges import router as exchanges_router
 from app.modules.cards.router import router as cards_router
 from app.modules.community.router import router as community_router
 from app.modules.groups.memberships import router as memberships_router
@@ -19,6 +20,7 @@ router.include_router(seniors_router)
 router.include_router(photos_router)
 router.include_router(interviews_router)
 router.include_router(cards_router)
+router.include_router(exchanges_router)
 router.include_router(groups_router)
 router.include_router(memberships_router)
 router.include_router(meetings_router)

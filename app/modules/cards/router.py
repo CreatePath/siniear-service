@@ -11,7 +11,8 @@ from app.core.schemas import Page
 from app.db.models.identity import Senior
 from app.db.models.interview import Card
 from app.db.models.membership import MembershipTitle
-from app.modules.cards.schemas import CardPatch, CardSettings, CardView, OwnedView
+from app.modules.cards.exchanges import received
+from app.modules.cards.schemas import CardPatch, CardSettings, CardView, OwnedView, PeerView
 from app.modules.cards.service import active_card, changed, missing, owned_card, render_card
 from app.modules.seniors.profile import VersionHeader
 
@@ -41,14 +42,14 @@ def list_cards(
 
 
 @router.get("/cards/{card_id}")
-def detail(card_id: UUID, actor: Actor, session: Database) -> OwnedView:
+def detail(card_id: UUID, actor: Actor, session: Database) -> OwnedView | PeerView:
     with session.begin():
         session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
         card = session.scalar(select(Card).where(Card.id == card_id, active_card()))
         if card is None:
             raise missing()
         if card.senior_id != actor.senior_id:
-            raise missing()
+            received(session, actor.senior_id, card_id)
         return render_card(session, card, owner=card.senior_id == actor.senior_id)
 
 
