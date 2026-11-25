@@ -10,6 +10,7 @@ from app.core.pagination import paginate
 from app.core.schemas import Page
 from app.db.models.identity import Senior
 from app.db.models.interview import Card
+from app.db.models.membership import MembershipTitle
 from app.modules.cards.schemas import CardPatch, CardSettings, CardView, OwnedView
 from app.modules.cards.service import active_card, changed, missing, owned_card, render_card
 from app.modules.seniors.profile import VersionHeader
@@ -59,12 +60,19 @@ def update(
         card = owned_card(session, actor.senior_id, card_id, lock=True)
         if card.version != int(if_match[1:-1]):
             raise changed()
-        group_only = {"role", "group_intro"}
+        group_only = {"role", "group_intro", "selected_title_id"}
         if card.membership_id is None and (
             data.model_fields_set & group_only
             or set(data.visible_fields or []) & {"role", "group_intro", "title"}
         ):
             raise DomainError(422, "VALIDATION_ERROR", "소속 명함에서만 사용할 수 있습니다.")
+        if data.selected_title_id and not session.scalar(
+            select(MembershipTitle.id).where(
+                MembershipTitle.id == data.selected_title_id,
+                MembershipTitle.membership_id == card.membership_id,
+            )
+        ):
+            raise DomainError(422, "VALIDATION_ERROR", "현재 소속에서 보유한 칭호를 선택해 주세요.")
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(card, key, value)
         card.version += 1

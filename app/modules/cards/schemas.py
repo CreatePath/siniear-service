@@ -24,7 +24,7 @@ PublicField = Literal[
     "job_title",
     "region_code",
 ]
-GroupField = Literal["role", "group_intro"]
+GroupField = Literal["role", "group_intro", "title"]
 VisibleFields = Annotated[list[PublicField], Field(max_length=13)]
 GroupFields = Annotated[list[PublicField | GroupField], Field(max_length=16)]
 
@@ -47,6 +47,7 @@ class CardPatch(CardSettings):
     visible_fields: GroupFields | None = None
     role: Name | None = None
     group_intro: ShortText | None = None
+    selected_title_id: UUID | None = None
 
     @model_validator(mode="after")
     def changes(self):
@@ -91,6 +92,7 @@ class GroupCardView(PublicGroupCard):
     version: int
     visible_fields: GroupFields
     membership_id: UUID
+    selected_title_id: UUID | None
     role: str | None
     group_intro: str | None
 

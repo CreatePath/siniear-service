@@ -3,7 +3,7 @@ from sqlalchemy import or_, select
 from app.core.errors import DomainError
 from app.db.models import Group, Senior
 from app.db.models.interview import Card
-from app.db.models.membership import Membership
+from app.db.models.membership import Membership, MembershipTitle
 from app.modules.cards.schemas import (
     CardPreview,
     CardView,
@@ -76,9 +76,13 @@ def render_card(session, card, *, owner=False, preview_offer=None):
             else f"/api/exchange-offers/{preview_offer}/photo"
         )
     if card.membership_id:
+        title = (
+            session.get(MembershipTitle, card.selected_title_id) if card.selected_title_id else None
+        )
         extras = {
             "role": card.role,
             "group_intro": card.group_intro,
+            "title": title.label if title else None,
         }
     values = project_card(card, senior, photo_url=photo_url, group_fields=extras).model_dump()
     values["id"] = card.id
@@ -102,6 +106,7 @@ def render_card(session, card, *, owner=False, preview_offer=None):
                 membership_id=membership.id,
                 role=card.role,
                 group_intro=card.group_intro,
+                selected_title_id=card.selected_title_id,
             )
         return PublicGroupCard(**values)
     return CardView(**values) if owner else PublicCard(**values)

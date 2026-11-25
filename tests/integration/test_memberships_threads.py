@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models.membership import JoinRequest, Membership
+from app.db.models.membership import JoinRequest, Membership, MembershipTitle
 from tests.integration.conftest import auth, join
 from tests.integration.test_groups_meetings import create_group, meeting_data
 
@@ -34,11 +34,40 @@ def test_review_membership_title_and_thread_access(api, db_engine):
     assert api.get(meeting_path, headers=member).json()["participant_count"] == 0
     (membership,) = api.get("/api/me/memberships", headers=member).json()["items"]
     card = "/api/cards/" + membership["card_id"]
+    titles = f"/api/me/memberships/{membership['id']}/titles"
+    assert api.get(titles, headers=member).json() == {"items": []}
+    with Session(db_engine) as session, session.begin():
+        award = MembershipTitle(
+            membership_id=UUID(membership["id"]), label="합성 칭호", evidence_ref="synthetic"
+        )
+        session.add(award)
+        session.flush()
+        award_id = str(award.id)
+    assert api.get(titles, headers=member).json()["items"] == [
+        {"id": award_id, "label": "합성 칭호"}
+    ]
+    edit = api.patch(
+        card,
+        headers={**member, "If-Match": '"1"'},
+        json={"selected_title_id": award_id, "visible_fields": ["title"]},
+    )
+    assert edit.json()["fields"] == {"title": "합성 칭호"}
     assert api.delete(group_path + "/memberships/me", headers=member).status_code == 204
-    assert api.get(card, headers=member).status_code == 404
+    for url in (card, titles):
+        assert api.get(url, headers=member).status_code == 404
     join(api, group["id"])
     (new,) = api.get("/api/me/memberships", headers=member).json()["items"]
     assert new["id"] != membership["id"]
+    assert (
+        api.patch(
+            "/api/cards/" + new["card_id"],
+            headers={**member, "If-Match": '"1"'},
+            json={"selected_title_id": award_id},
+        ).status_code
+        == 422
+    )
+
+
 @pytest.mark.parametrize("finish", ["reject", "close", "withdraw"])
 def test_review_races_with_resolution(api, db_engine, finish):
     group = create_group(api)
