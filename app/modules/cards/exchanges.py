@@ -4,8 +4,9 @@ from secrets import token_urlsafe
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Response
-from sqlalchemy import case, or_, select
+from fastapi import APIRouter, Header, Query, Response
+from sqlalchemy import and_, any_, case, delete, func, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import aliased
 
 from app.api.dependencies import Actor, Cursor, Database, Key, Limit
@@ -14,16 +15,19 @@ from app.core.idempotency import remember, replay
 from app.core.pagination import paginate
 from app.core.schemas import Page
 from app.db.models import Senior
-from app.db.models.exchange import Exchange, ExchangeOffer
+from app.db.models.exchange import Exchange, ExchangeOffer, Favorite
 from app.db.models.identity import MediaAsset
 from app.db.models.interview import Card
 from app.modules.cards.exchange_schemas import (
     Accept,
+    BookItem,
+    BookPage,
     ExchangeView,
     OfferCreated,
     OfferInput,
     Preview,
     Scan,
+    Star,
 )
 from app.modules.cards.service import active_card, lock_cards, missing, owned_card, render_card
 
@@ -188,10 +192,126 @@ def exchanges(
         return Page(items=[exchange_view(session, row) for row in rows], next_cursor=after)
 
 
-def received(session, senior_id, card_id):
+def book_entries(senior_id, keyword=""):
     live = connections(senior_id)
-    if not session.scalar(select(live.c.exchange_id).where(live.c.peer_id == card_id).limit(1)):
+    rank = (
+        func.row_number()
+        .over(
+            partition_by=live.c.peer_id,
+            order_by=(live.c.exchanged_at.desc(), live.c.exchange_id.desc()),
+        )
+        .label("position")
+    )
+    latest = select(live, rank).subquery()
+    star = (
+        select(Favorite.received_card_id)
+        .where(Favorite.owner_senior_id == senior_id, Favorite.received_card_id == latest.c.peer_id)
+        .exists()
+    )
+    query = select(latest, star.label("is_favorite")).where(latest.c.position == 1)
+    if keyword:
+        name = case(
+            (Senior.card_name_mode == "name", func.coalesce(Senior.name, Senior.nickname)),
+            else_=Senior.nickname,
+        )
+        query = (
+            query.join(Card, Card.id == latest.c.peer_id)
+            .join(Senior, Senior.id == Card.senior_id)
+            .where(
+                or_(
+                    name.icontains(keyword, autoescape=True),
+                    and_(
+                        any_(Card.visible_fields) == "experience",
+                        Senior.experience.icontains(keyword, autoescape=True),
+                    ),
+                )
+            )
+        )
+    return query.subquery()
+
+
+def book_item(session, row):
+    return BookItem(
+        peer_card=render_card(session, session.get(Card, row.peer_id)),
+        exchanged_at=row.exchanged_at,
+        exchange_method=row.exchange_method,
+        is_favorite=row.is_favorite,
+    )
+
+
+def received(session, senior_id, card_id):
+    book = book_entries(senior_id)
+    row = session.execute(select(book).where(book.c.peer_id == card_id)).one_or_none()
+    if row is None:
         raise missing()
+    return row
+
+
+@router.get("/me/card-book")
+def book(
+    actor: Actor,
+    session: Database,
+    keyword: Annotated[str, Query(max_length=200)] = "",
+    favorite_only: bool = False,
+    limit: Limit = 20,
+    cursor: Cursor = None,
+) -> BookPage:
+    with session.begin():
+        session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+        keyword = keyword.strip()
+        entries = book_entries(actor.senior_id, keyword)
+        total, stars = session.execute(
+            select(func.count(), func.count().filter(entries.c.is_favorite)).select_from(entries)
+        ).one()
+        query = select(entries)
+        if favorite_only:
+            query = query.where(entries.c.is_favorite)
+        rows, after = paginate(
+            session,
+            query,
+            column=entries.c.exchanged_at,
+            id_column=entries.c.peer_id,
+            limit=limit,
+            cursor=cursor,
+            scope=["card_book", actor.senior_id, keyword, favorite_only],
+            descending=True,
+            mappings=True,
+        )
+        return BookPage(
+            items=[book_item(session, row) for row in rows],
+            total_count=total,
+            favorite_count=stars,
+            next_cursor=after,
+        )
+
+
+@router.get("/me/card-book/{card_id}")
+def entry(card_id: UUID, actor: Actor, session: Database) -> BookItem:
+    with session.begin():
+        session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+        return book_item(session, received(session, actor.senior_id, card_id))
+
+
+@router.put("/me/card-book/{card_id}/favorite")
+def favorite(card_id: UUID, data: Star, actor: Actor, session: Database) -> Star:
+    with session.begin():
+        row = received(session, actor.senior_id, card_id)
+        lock_cards(session, [row.my_id, card_id])
+        received(session, actor.senior_id, card_id)
+        if data.is_favorite:
+            session.execute(
+                insert(Favorite)
+                .values(owner_senior_id=actor.senior_id, received_card_id=card_id)
+                .on_conflict_do_nothing()
+            )
+        else:
+            session.execute(
+                delete(Favorite).where(
+                    Favorite.owner_senior_id == actor.senior_id,
+                    Favorite.received_card_id == card_id,
+                )
+            )
+        return data
 
 
 def photo_response(session, card):

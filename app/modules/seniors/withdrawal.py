@@ -14,6 +14,7 @@ from app.db.models import (
     Senior,
     User,
 )
+from app.db.models.exchange import Favorite
 from app.db.models.identity import MediaAsset, RefreshSession
 from app.db.models.interview import Card, Interview
 from app.integrations import kakao
@@ -89,6 +90,7 @@ def withdraw(session, user_id):
                 if senior:
                     session.execute(delete(Interview).where(Interview.senior_id == senior.id))
                     leave_meetings(session, senior.id)
+                    session.execute(delete(Favorite).where(Favorite.owner_senior_id == senior.id))
                     session.execute(delete(Card).where(Card.senior_id == senior.id))
                     session.execute(
                         delete(IdempotencyRecord).where(

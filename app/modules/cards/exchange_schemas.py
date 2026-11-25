@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
-from app.core.schemas import Input
+from app.core.schemas import Input, Page
 from app.modules.cards.schemas import PeerView
 
 Token = Annotated[str, Field(min_length=1, max_length=256)]
@@ -41,3 +41,19 @@ class ExchangeView(BaseModel):
     peer_card: PeerView
     exchanged_at: datetime
     exchange_method: Method | None
+
+
+class BookItem(BaseModel):
+    peer_card: PeerView
+    exchanged_at: datetime
+    exchange_method: Method | None
+    is_favorite: bool
+
+
+class BookPage(Page[BookItem]):
+    total_count: int
+    favorite_count: int
+
+
+class Star(Input):
+    is_favorite: StrictBool
