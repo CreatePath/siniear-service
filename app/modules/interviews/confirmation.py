@@ -8,7 +8,7 @@ from app.modules.cards.schemas import Confirmed
 from app.modules.cards.service import card_view, project_card
 from app.modules.cards.service import changed as card_changed
 from app.modules.interviews.service import changed, owned
-from app.modules.seniors.profile import Profile, check_photo, edit_profile
+from app.modules.seniors.profile import Profile, check_name, check_photo, edit_profile
 
 
 def check_versions(row, senior, card, data):
@@ -29,7 +29,13 @@ def preview(session, actor, interview_id, data):
         edits = data.profile.model_dump(exclude_unset=True)
         check_photo(session, senior.user_id, edits.get("photo_id"))
         proposed = Profile.model_validate(senior).model_copy(update=edits)
-        return project_card(data, proposed)
+        check_name(proposed.card_name_mode, proposed.name)
+        settings = (
+            data
+            if not card or "color_code" in data.model_fields_set
+            else data.model_copy(update={"color_code": card.color_code})
+        )
+        return project_card(settings, proposed)
 
 
 def confirm(session, actor, interview_id, data, key):
@@ -48,12 +54,16 @@ def confirm(session, actor, interview_id, data, key):
                 session.add(card)
             else:
                 card.version += 1
+            if card.version is None or "color_code" in data.model_fields_set:
+                card.color_code = data.color_code
             card.template_key = data.template_key
             card.visible_fields = data.visible_fields
             row.status, row.draft = "confirmed", None
             row.version += 1
             session.flush()
-            remember(session, *args, 200, {}, resource_id=row.id)
+            remember(session, *args, 200, {}, resource_id=card.id)
+        if card is None or (record and record.resource_id != card.id):
+            raise card_changed()
         return Confirmed(
             interview_id=row.id,
             profile=Profile.model_validate(senior),

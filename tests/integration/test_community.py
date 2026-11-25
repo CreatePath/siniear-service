@@ -76,8 +76,8 @@ def test_crud_current_names_counts_and_response_fields(api, db_engine):
     assert response.status_code == 200
     assert response.json()["updated_at"] > first["updated_at"]
     with Session(db_engine) as session, session.begin():
-        session.get(Senior, ids("member")[1]).name = "가상 새 작성자"
-        session.get(Senior, ids("other")[1]).name = "가상 새 댓글자"
+        session.get(Senior, ids("member")[1]).nickname = "가상 새 작성자"
+        session.get(Senior, ids("other")[1]).nickname = "가상 새 댓글자"
     detail = api.get(path).json()
     assert detail["author_name"] == "가상 새 작성자"
     listing = api.get(f"/api/groups/{post['group_id']}/posts").json()["items"]

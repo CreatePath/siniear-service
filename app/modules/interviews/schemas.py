@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.core.schemas import Input, Interests, Name
-from app.modules.seniors.profile import ShortText
+from app.modules.seniors.profile import ActivityStyle, ShortText
 
 
 class Question(Input):
@@ -14,6 +14,7 @@ class Question(Input):
 
 
 class Draft(Input):
+    activity_style: ActivityStyle | None = None
     experience: ShortText | None = None
     strengths: Interests = Field(default_factory=list)
     interests: Interests = Field(default_factory=list)

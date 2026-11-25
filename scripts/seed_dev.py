@@ -31,7 +31,7 @@ def seed(session):
             Senior(
                 id=senior_id,
                 user_id=user_id,
-                name=f"가상회원{index + 1}",
+                nickname=f"가상회원{index + 1}",
                 region_code="11110",
                 interests=["산책", "독서"],
             )

@@ -12,7 +12,7 @@ from app.integrations import kakao
 from tests.integration.test_groups_meetings import create_group, meeting_data
 
 PROFILE = {
-    "name": "가상 회원",
+    "nickname": "가상 회원",
     "region_code": "TEST",
     "interests": ["산책"],
 }
@@ -101,7 +101,7 @@ def test_member_onboarding_and_ownership(api, sign_in):
     assert api.patch(path, headers=actor, json={}).status_code == 422
     edit_headers = {**actor, "If-Match": '"1"'}
     assert api.patch(path, headers=edit_headers, json={"region_code": "B"}).json()["version"] == 2
-    assert api.patch(path, headers=edit_headers, json={"name": "합성"}).status_code == 409
+    assert api.patch(path, headers=edit_headers, json={"nickname": "합성"}).status_code == 409
     assert api.get("/api/groups", headers=actor).status_code == 200
 
 

@@ -1,16 +1,16 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from sqlalchemy import select
 
 from app.api.dependencies import Actor, Database
-from app.core.errors import API_ERRORS
+from app.core.errors import API_ERRORS, DomainError
 from app.core.pagination import paginate
 from app.core.schemas import Page
 from app.db.models.identity import Senior
 from app.db.models.interview import Card
-from app.modules.cards.schemas import CardPatch, CardView
+from app.modules.cards.schemas import CardPatch, CardSettings, CardView
 from app.modules.cards.service import card_view, changed, owned_card
 from app.modules.seniors.profile import VersionHeader
 
@@ -57,3 +57,25 @@ def update(
             setattr(card, key, value)
         card.version += 1
         return card_view(card, session.get(Senior, actor.senior_id))
+
+
+@router.post("/me/cards", status_code=201)
+def create_personal(data: CardSettings, actor: Actor, session: Database) -> CardView:
+    with session.begin():
+        session.get(Senior, actor.senior_id, with_for_update=True)
+        if session.scalar(select(Card.id).where(Card.senior_id == actor.senior_id)):
+            raise DomainError(409, "CARD_EXISTS", "개인 명함이 이미 있습니다.")
+        card = Card(senior_id=actor.senior_id, **data.model_dump())
+        session.add(card)
+        session.flush()
+        return card_view(card, session.get(Senior, actor.senior_id))
+
+
+@router.delete("/cards/{card_id}", status_code=204)
+def delete_card(card_id: UUID, if_match: VersionHeader, actor: Actor, session: Database):
+    with session.begin():
+        card = owned_card(session, actor.senior_id, card_id, lock=True)
+        if card.version != int(if_match[1:-1]):
+            raise changed()
+        session.delete(card)
+        return Response(status_code=204)

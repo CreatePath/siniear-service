@@ -74,7 +74,9 @@ def withdraw(session, user_id):
                             IdempotencyRecord.subject_id == str(senior.id)
                         )
                     )
-                    senior.name = "탈퇴 회원"
+                    senior.nickname = "탈퇴 회원"
+                    senior.name = senior.activity_style = senior.job_title = None
+                    senior.card_name_mode = "nickname"
                     senior.region_code = ""
                     senior.interests = []
                     senior.photo_id = senior.age_band = senior.experience = senior.disposition = (

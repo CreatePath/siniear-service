@@ -1,21 +1,14 @@
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends
 
-from app.api.dependencies import Actor, Database
-from app.core.errors import API_ERRORS, DomainError, ErrorResponse
+from app.api.dependencies import Actor, Database, Key, empty_request
+from app.core.errors import API_ERRORS, ErrorResponse
 from app.modules.cards.schemas import CardPreview, Confirmation, Confirmed
 from app.modules.interviews import confirmation, service
 from app.modules.interviews.schemas import Answer, InterviewView
 
 router = APIRouter(prefix="/interviews", tags=["interviews"], responses=API_ERRORS)
-Key = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=200)]
-
-
-async def empty_request(request: Request):
-    if await request.body():
-        raise DomainError(422, "VALIDATION_ERROR", "본문을 비워 주세요.")
 
 
 @router.post(

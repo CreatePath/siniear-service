@@ -30,7 +30,7 @@ def get_comment_for_change(session, comment_id):
 def author_names(session, rows):
     return dict(
         session.execute(
-            select(Senior.id, Senior.name).where(Senior.id.in_({row.author_id for row in rows}))
+            select(Senior.id, Senior.nickname).where(Senior.id.in_({row.author_id for row in rows}))
         ).all()
     )
 

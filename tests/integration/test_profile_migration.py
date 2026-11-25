@@ -68,7 +68,10 @@ def test_upgrade_preserves_profiles_registrations_and_replays(schema_engine):
         """)
         ).one()
         command.upgrade(config, "head")
-        assert [connection.execute(query).all() for query in queries] == before
+        migrated_profiles = text("SELECT id,user_id,nickname,interests FROM seniors ORDER BY id")
+        assert connection.execute(migrated_profiles).all() == before[0]
+        assert [connection.execute(query).all() for query in queries[1:]] == before[1:]
+        assert connection.scalar(text("SELECT count(*) FROM seniors WHERE name IS NOT NULL")) == 0
         assert (
             connection.execute(
                 text("""

@@ -73,7 +73,7 @@ def seed(session, now=None):
             seniors.insert().values(
                 id=demo_id("senior", name),
                 user_id=demo_id("user", name),
-                name=f"테스트회원-{name}",
+                **{"nickname" if "nickname" in seniors.c else "name": f"테스트회원-{name}"},
                 region_code="11110",
                 interests=["산책", "독서"],
                 **legacy_defaults,

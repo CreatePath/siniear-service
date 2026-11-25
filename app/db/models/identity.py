@@ -40,7 +40,11 @@ class Senior(Base):
     __tablename__ = "seniors"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), unique=True)
-    name: Mapped[str] = mapped_column(Text)
+    nickname: Mapped[str] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(Text)
+    card_name_mode: Mapped[str] = mapped_column(Text, server_default="nickname")
+    activity_style: Mapped[str | None] = mapped_column(Text)
+    job_title: Mapped[str | None] = mapped_column(Text)
     region_code: Mapped[str] = mapped_column(Text)
     interests: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     version: Mapped[int] = mapped_column(server_default="1")

@@ -15,6 +15,7 @@ from app.modules.seniors.profile import (
     ProfileCreate,
     ProfilePatch,
     VersionHeader,
+    check_name,
     check_photo,
     edit_profile,
 )
@@ -38,6 +39,7 @@ def create_profile(data: ProfileCreate, account: Member, session: Database) -> P
             raise unauthorized()
         if session.scalar(select(Senior.id).where(Senior.user_id == user.id)):
             raise DomainError(409, "PROFILE_EXISTS", "이미 프로필이 등록되어 있습니다.")
+        check_name(data.card_name_mode, None)
         check_photo(session, user.id, data.photo_id)
         senior = Senior(user_id=user.id, **data.model_dump())
         session.add(senior)

@@ -29,7 +29,10 @@ def project_card(card, senior):
             value = getattr(senior, key)
             if value is not None:
                 fields[key] = value
-    return CardPreview(name=senior.name, template_key=card.template_key, fields=fields)
+    name = senior.name if senior.card_name_mode == "name" and senior.name else senior.nickname
+    return CardPreview(
+        name=name, template_key=card.template_key, color_code=card.color_code, fields=fields
+    )
 
 
 def card_view(card, senior):

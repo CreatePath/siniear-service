@@ -44,6 +44,7 @@ class Card(Base):
     __table_args__ = (CheckConstraint("version > 0", name="version"),)
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"), unique=True)
+    color_code: Mapped[str] = mapped_column(Text, server_default="#1D961B")
     template_key: Mapped[str] = mapped_column(Text)
     visible_fields: Mapped[list[str]] = mapped_column(ARRAY(Text))
     version: Mapped[int] = mapped_column(default=1)
