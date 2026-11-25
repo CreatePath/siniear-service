@@ -1,6 +1,6 @@
 # 신이어 서비스 서버
 
-은퇴 직후 65세 이상 남성의 모임 참여, 프로필과 명함 교환을 지원하는 앱의 백엔드다. 현재 체크아웃은 카카오 로그인, 비공개 프로필·사진, 앱 인터뷰, 개인 명함과 기존 모임·일정·신청·게시글·댓글을 제공한다. 모임 가입·소속 명함·명함 교환은 [목표 명세](../docs/MVP_API_CONTRACT.md)의 다음 단계다.
+은퇴 직후 65세 이상 남성의 모임 참여를 지원하는 앱의 백엔드다. 카카오 로그인, 비공개 인터뷰·프로필, 개인·소속 명함과 교환, 받은 명함첩, 모임 추천·가입 심사, 일정 신청, 게시글·일정 댓글과 답글을 제공한다. [앱 API 계약](../docs/MVP_API_CONTRACT.md)
 
 ## 로컬 실행
 
@@ -23,7 +23,17 @@ docker compose ps
 3. `ready` 상태에서 사용자가 고친 `profile`, 템플릿, 공개 항목, 인터뷰·프로필·카드 버전을 같은 본문으로 `/preview`와 `/confirm`에 차례로 보낸다. 최초 확정은 `card_version: null`이다. 새 초안 생성 기준은 [요약 시스템 프롬프트](app/integrations/interview_model.py)의 `SUMMARY_SYSTEM_PROMPT`에 있다. 미리보기는 상태를 변경하지 않는다.
 4. `GET /api/me/cards`로 결과를 조회한다. 프로필·명함 수정 시 최근 버전을 따옴표로 감싼 `If-Match`를 보낸다.
 
-기본 `INTERVIEW_PROVIDER=fake`는 오프라인 시연용이다. 실제 모델은 서비스 환경에 `INTERVIEW_PROVIDER=gemini`, `GEMINI_INTERVIEW_MODEL`, `GEMINI_API_KEY`를 지정해야 호출한다. 개발 기본 키는 캐릭터 `default`·`leaf`, 개인 명함 템플릿 `default`·`classic`이다. 사진의 시연용 입력 한도는 JPEG/PNG 5 MiB, 1,200만 픽셀이다. 서버는 메타데이터를 제거하고 긴 변을 최대 2,048픽셀로 줄인 JPEG를 PostgreSQL에 보관한다. 사용자 탈퇴 시 업로드한 미연결 사진도 지운다.
+기본 `INTERVIEW_PROVIDER=fake`는 오프라인 시연용이다. 실제 모델은 서비스 환경에 `INTERVIEW_PROVIDER=gemini`, `GEMINI_INTERVIEW_MODEL`, `GEMINI_API_KEY`를 지정해야 호출한다. 개발 기본 키는 캐릭터 `default`·`leaf`, 개인 명함 템플릿 `default`·`classic`·`fresh_start`이다. 사진의 시연용 입력 한도는 JPEG/PNG 5 MiB, 1,200만 픽셀이다. 서버는 메타데이터를 제거하고 긴 변을 최대 2,048픽셀로 줄인 JPEG를 PostgreSQL에 보관한다. 사용자 탈퇴 시 업로드한 미연결 사진도 지운다.
+
+## 앱 연동
+
+프로필 생성·수정에는 `nickname`을 사용한다. `name`은 인증된 실명의 조회 전용 필드다. 프로필 삭제는 `DELETE /api/users/me`로 계정 탈퇴와 함께 처리한다. `POST /api/me/cards`로 개인 명함을 직접 만들고 `DELETE /api/cards/{card_id}`에 현재 버전의 `If-Match`를 보내 삭제할 수 있다. 소속 명함은 개설·가입 승인 시 발급되고 모임 탈퇴·종료 시 효력을 잃는다.
+
+모임장 계정과 신청자 계정으로 가입 신청 → 승인 → 내 소속 목록 → 소속 명함을 순서대로 호출한다. 칭호 목록은 해당 가입 기간에 이미 부여한 항목을 반환한다. 역할·소개·대표 칭호는 명함 PATCH에서 편집한다.
+
+교환 제안의 개발 기본 유효시간은 10분이다. 수신자가 미리보기 후 자신의 명함으로 수락하면 양측 명함첩에 반영된다. 미리보기의 사진 URL은 Bearer 인증과 `X-Exchange-Token` 헤더가 필요하다. 교환 후 사진은 Bearer 인증과 현재 교환·공개 상태로 조회한다.
+
+스키마 head는 `aa2611000004`다. 이전 코드에서 `name`에 쓴 표시 이름은 `nickname`으로 이관한다. 기존 활성 모임에는 개설자의 가입 기간·소속 명함만 발급한다. 구버전 서버의 쓰기를 중단한 뒤 앱의 닉네임 입력과 서버·스키마를 함께 전환한다.
 
 ## 검증
 
