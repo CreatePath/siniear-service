@@ -20,3 +20,4 @@ def test_upgrade_preserves_existing_senior_and_old_writer(db_engine):
             {"id": ids("owner")[1]},
         ).one()
         assert (version, avatar, goals) == (1, "default", [])
+        assert connection.scalar(text("SELECT count(*) FROM cards")) == 0

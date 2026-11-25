@@ -25,6 +25,7 @@ from app.db.models.call import (
 )
 from app.db.models.call_runtime import CallExecution, CallProcessingJob, InboxEvent, OutboxMessage
 from app.db.models.identity import MediaAsset, RefreshSession
+from app.db.models.interview import Card, Interview
 from app.integrations import kakao
 from app.modules.auth.service import unauthorized
 from app.modules.meetings.cancellation import cancel_group_meetings, cancel_locked_meeting
@@ -116,6 +117,8 @@ def withdraw(session, user_id):
                     select(Senior).where(Senior.user_id == user_id).with_for_update()
                 )
                 if senior:
+                    session.execute(delete(Interview).where(Interview.senior_id == senior.id))
+                    session.execute(delete(Card).where(Card.senior_id == senior.id))
                     leave_meetings(session, senior.id, at)
                     erase_calls(session, senior.id)
                     senior.name = "탈퇴 회원"
