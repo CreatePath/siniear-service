@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 
+from sqlalchemy import func, select
+
 from app.core.errors import DomainError
-from app.db.models import Meeting
+from app.db.models import Comment, Meeting
 from app.modules.groups.repository import get_group
 from app.modules.meetings.cancellation import cancel_locked_meeting
 from app.modules.meetings.registration_repository import meeting_snapshot, participant_count
@@ -40,6 +42,11 @@ def as_response(session, meeting):
     return MeetingResponse.model_validate(meeting, from_attributes=True).model_copy(
         update={
             "status": effective_status(meeting, now()),
+            "comment_count": session.scalar(
+                select(func.count())
+                .select_from(Comment)
+                .where(Comment.meeting_id == meeting.id, Comment.parent_comment_id.is_(None))
+            ),
             "participant_count": count,
             "remaining_capacity": meeting.capacity - count,
         }

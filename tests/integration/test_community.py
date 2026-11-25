@@ -58,6 +58,9 @@ def test_crud_current_names_counts_and_response_fields(api, db_engine):
     assert set(first) == {
         "id",
         "post_id",
+        "meeting_id",
+        "parent_comment_id",
+        "reply_count",
         "author_id",
         "author_name",
         "content",

@@ -15,16 +15,23 @@ def get_post(session, post_id, *, lock=False):
     return post
 
 
-def get_comment_for_change(session, comment_id):
-    post_id = session.scalar(select(Comment.post_id).where(Comment.id == comment_id))
-    if post_id is None:
+def get_comment_for_change(session, comment_id, principal, *, lock=True):
+    from app.modules.meetings.repository import get_meeting, require_meeting_access
+
+    targets = session.execute(
+        select(Comment.post_id, Comment.meeting_id).where(Comment.id == comment_id)
+    ).one_or_none()
+    if targets is None:
         raise DomainError(404, "COMMENT_NOT_FOUND", "댓글을 찾을 수 없습니다.")
-    # All comment changes take the parent lock first, including physical deletion.
-    post = get_post(session, post_id, lock=True)
+    if targets.post_id:
+        target = get_post(session, targets.post_id, lock=lock)
+    else:
+        target, _ = get_meeting(session, targets.meeting_id, lock=lock)
+        require_meeting_access(session, target, principal.senior_id)
     comment = session.get(Comment, comment_id, populate_existing=True)
     if comment is None:
         raise DomainError(404, "COMMENT_NOT_FOUND", "댓글을 찾을 수 없습니다.")
-    return post, comment
+    return target, comment
 
 
 def author_names(session, rows):
@@ -42,7 +49,9 @@ def post_responses(session, rows):
     counts = dict(
         session.execute(
             select(Comment.post_id, func.count(Comment.id))
-            .where(Comment.post_id.in_([row.id for row in rows]))
+            .where(
+                Comment.post_id.in_([row.id for row in rows]), Comment.parent_comment_id.is_(None)
+            )
             .group_by(Comment.post_id)
         ).all()
     )
@@ -66,10 +75,20 @@ def comment_responses(session, rows):
     if not rows:
         return []
     names = author_names(session, rows)
+    counts = dict(
+        session.execute(
+            select(Comment.parent_comment_id, func.count())
+            .where(Comment.parent_comment_id.in_([row.id for row in rows]))
+            .group_by(Comment.parent_comment_id)
+        ).all()
+    )
     return [
         CommentResponse(
             id=row.id,
             post_id=row.post_id,
+            meeting_id=row.meeting_id,
+            parent_comment_id=row.parent_comment_id,
+            reply_count=counts.get(row.id, 0),
             author_id=row.author_id,
             author_name=names[row.author_id],
             content=row.content,

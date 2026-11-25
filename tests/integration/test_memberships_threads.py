@@ -5,8 +5,10 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.models import Comment
 from app.db.models.membership import JoinRequest, Membership, MembershipTitle
 from tests.integration.conftest import auth, join
+from tests.integration.test_community import create_comment, create_post
 from tests.integration.test_groups_meetings import create_group, meeting_data
 
 
@@ -17,12 +19,14 @@ def test_review_membership_title_and_thread_access(api, db_engine):
     del body["region_code"]
     meeting = api.post(group_path + "/meetings", json=body).json()
     meeting_path = f"/api/meetings/{meeting['id']}"
+    comments = meeting_path + "/comments"
     member = auth("member")
     key = {**member, "Idempotency-Key": "apply"}
     path = group_path + "/join-requests"
     request = api.post(path, headers=key).json()
     review = path + "/" + request["id"]
     assert api.get(group_path, headers=member).json()["my_membership_status"] == "pending"
+    assert api.get(comments, headers=member).status_code == 403
     assert api.post(meeting_path + "/registrations", headers=key).status_code == 403
     assert api.get(path, headers=member).status_code == 403
     assert api.patch(review, json={"status": "approved"}, headers=member).status_code == 403
@@ -52,9 +56,24 @@ def test_review_membership_title_and_thread_access(api, db_engine):
         json={"selected_title_id": award_id, "visible_fields": ["title"]},
     )
     assert edit.json()["fields"] == {"title": "합성 칭호"}
+    root = api.post(comments, json={"content": "원댓글"}, headers=key).json()
+    replies = f"/api/comments/{root['id']}/replies"
+    reply = api.post(replies, json={"content": "답글"}, headers={"Idempotency-Key": "reply"}).json()
+    assert (
+        api.post(replies, json={"content": "답글"}, headers={"Idempotency-Key": "reply"}).json()
+        == reply
+    )
+    assert api.get(comments, headers=member).json()["items"][0]["reply_count"] == 1
+    assert api.get(meeting_path).json()["comment_count"] == 1
+    assert api.get(f"/api/comments/{reply['id']}/replies").status_code == 422
+    assert api.get(replies, headers=auth("other")).status_code == 403
+    assert api.delete(f"/api/comments/{root['id']}").status_code == 403
+    assert api.delete(f"/api/comments/{root['id']}", headers=member).status_code == 204
+    assert api.get(replies).status_code == 404
     assert api.delete(group_path + "/memberships/me", headers=member).status_code == 204
     for url in (card, titles):
         assert api.get(url, headers=member).status_code == 404
+    assert api.get(comments, headers=member).status_code == 403
     join(api, group["id"])
     (new,) = api.get("/api/me/memberships", headers=member).json()["items"]
     assert new["id"] != membership["id"]
@@ -102,3 +121,23 @@ def test_review_races_with_resolution(api, db_engine, finish):
                 path + "/join-requests", headers={**headers, "Idempotency-Key": "again"}
             )
             assert retried.status_code == 201 and retried.json()["id"] != applied["id"]
+
+
+def test_post_reply_parent_delete_race(api, db_engine):
+    post = create_post(api)
+    parent = create_comment(api, post)
+    path = "/api/comments/" + parent["id"]
+    with ThreadPoolExecutor(2) as pool:
+        reply = pool.submit(
+            api.post,
+            path + "/replies",
+            json={"content": "합성 답글"},
+            headers={"Idempotency-Key": "race"},
+        )
+        deleted = pool.submit(api.delete, path)
+        assert deleted.result().status_code == 204
+        assert reply.result().status_code in (201, 404)
+    assert api.get(path + "/replies").status_code == 404
+    assert api.get("/api/posts/" + post["id"]).json()["comment_count"] == 0
+    with Session(db_engine) as session:
+        assert session.scalar(select(func.count()).select_from(Comment)) == 0
