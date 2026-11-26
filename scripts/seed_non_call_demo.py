@@ -125,8 +125,9 @@ def seed(session, now=None):
         ("past", "[테스트] 종료된 지난 산책", "walk", -7, 10),
     ):
         starts_at = base + timedelta(days=days)
-        session.add(
-            Meeting(
+        # Seed only columns shared with pre-category schemas before an upgrade.
+        session.execute(
+            Meeting.__table__.insert().values(
                 id=demo_id("meeting", name),
                 group_id=demo_id("group", group) if group else None,
                 owner_id=demo_id("senior", "owner"),

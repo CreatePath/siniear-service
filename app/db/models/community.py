@@ -32,6 +32,7 @@ class Meeting(Base):
     __tablename__ = "meetings"
     __table_args__ = (
         CheckConstraint("capacity > 0", name="capacity"),
+        CheckConstraint("category IN ('walk','hobby','exercise')", name="category"),
         CheckConstraint("ends_at > starts_at", name="time_order"),
         CheckConstraint("registration_closes_at <= starts_at", name="deadline"),
         CheckConstraint("status IN ('recruiting','closed','canceled','completed')", name="status"),
@@ -47,6 +48,7 @@ class Meeting(Base):
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     region_code: Mapped[str] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text)
+    category: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text, default="")
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

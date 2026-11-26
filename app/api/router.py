@@ -11,11 +11,13 @@ from app.modules.groups.router import router as groups_router
 from app.modules.interviews.router import router as interviews_router
 from app.modules.meetings.query_router import router as meeting_queries_router
 from app.modules.meetings.router import router as meetings_router
+from app.modules.search.router import router as search_router
 from app.modules.seniors.photos import router as photos_router
 from app.modules.seniors.router import router as seniors_router
 
 router = APIRouter(prefix="/api")
 router.include_router(health_router)
+router.include_router(search_router)
 router.include_router(auth_router)
 router.include_router(push_router)
 router.include_router(seniors_router)
