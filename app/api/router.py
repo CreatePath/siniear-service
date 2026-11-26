@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.health import router as health_router
+from app.modules.auth.push import router as push_router
 from app.modules.auth.router import router as auth_router
 from app.modules.cards.exchanges import router as exchanges_router
 from app.modules.cards.router import router as cards_router
@@ -16,6 +17,7 @@ from app.modules.seniors.router import router as seniors_router
 router = APIRouter(prefix="/api")
 router.include_router(health_router)
 router.include_router(auth_router)
+router.include_router(push_router)
 router.include_router(seniors_router)
 router.include_router(photos_router)
 router.include_router(interviews_router)

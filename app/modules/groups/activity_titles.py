@@ -1,8 +1,10 @@
 from sqlalchemy import func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import Meeting, Registration, RegistrationAction
+from app.db.models import Meeting, Registration, RegistrationAction, Senior
+from app.db.models.identity import RefreshSession
 from app.db.models.membership import ActivityTitleRule, Membership, MembershipTitle
+from app.db.models.push import PushDevice, TitlePushDelivery
 
 
 def award_titles(session, membership_id, activity, count, source_id):
@@ -13,11 +15,24 @@ def award_titles(session, membership_id, activity, count, source_id):
         ActivityTitleRule.label,
         literal(f"{activity}:{source_id}"),
     ).where(ActivityTitleRule.activity == activity, ActivityTitleRule.threshold == count)
-    session.execute(
+    title_id = session.scalar(
         insert(MembershipTitle)
         .from_select(["id", "membership_id", "label", "evidence_ref"], rules)
         .on_conflict_do_nothing(index_elements=["membership_id", "label"])
+        .returning(MembershipTitle.id)
     )
+    if title_id is None:
+        return
+    devices = session.scalars(
+        select(PushDevice.session_id)
+        .join(RefreshSession, RefreshSession.id == PushDevice.session_id)
+        .join(Senior, Senior.user_id == RefreshSession.user_id)
+        .join(Membership, Membership.senior_id == Senior.id)
+        .where(Membership.id == membership_id, RefreshSession.expires_at > func.now())
+        .order_by(PushDevice.session_id)
+        .with_for_update(of=PushDevice, read=True, key_share=True)
+    )
+    session.add_all(TitlePushDelivery(title_id=title_id, session_id=sid) for sid in devices)
 
 
 def record_post(session, post):
