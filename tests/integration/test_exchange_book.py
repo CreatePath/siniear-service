@@ -1,5 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 
+from sqlalchemy.orm import Session
+
+from app.db.models import Senior
+from scripts.seed_dev import ids
 from tests.integration.conftest import auth
 from tests.integration.test_groups_meetings import create_group
 
@@ -101,3 +105,90 @@ def test_group_exchange_and_duplicate_received_card(api):
     assert api.get("/api/cards/" + club["id"], headers=auth("member")).status_code == 404
     assert api.delete("/api/users/me").status_code == 204
     assert api.get("/api/me/card-book", headers=auth("member")).json()["items"] == []
+
+
+def test_book_search_uses_name_selected_for_display(api, db_engine):
+    peer, mine = personal(api, "owner"), personal(api, "member")
+    with Session(db_engine) as session, session.begin():
+        session.get(Senior, ids("owner")[1]).name = "합성실명"
+    token = offer(api, "owner", peer)
+    assert (
+        api.post(
+            "/api/exchanges",
+            headers={**auth("member"), "Idempotency-Key": "exchange"},
+            json={"token": token, "card_id": mine["id"]},
+        ).status_code
+        == 201
+    )
+
+    def matches(keyword):
+        response = api.get("/api/me/card-book", headers=auth("member"), params={"keyword": keyword})
+        assert response.status_code == 200
+        return [item["peer_card"]["id"] for item in response.json()["items"]]
+
+    assert matches(peer["name"]) == [peer["id"]]
+    assert matches("실명") == []
+    assert (
+        api.patch(
+            f"/api/seniors/{ids('owner')[1]}",
+            headers={"If-Match": '"1"'},
+            json={"card_name_mode": "name"},
+        ).status_code
+        == 200
+    )
+    assert matches(" 실명 ") == [peer["id"]]
+    assert matches(peer["name"]) == []
+
+
+def test_book_search_by_received_cards_current_group(api):
+    book = "/api/me/card-book"
+    personal_peer, mine = personal(api, "owner"), personal(api, "member")
+    group_names = ["달빛 Walk_100%", "토요 walk"]
+    for name in group_names:
+        assert (
+            api.post("/api/groups", json={"name": name, "region_code": "11110"}).status_code == 201
+        )
+    cards = api.get("/api/me/cards").json()["items"]
+    group_cards = {c["group"]["name"]: c for c in cards if c["kind"] == "group"}
+    first, second = (group_cards[name] for name in group_names)
+    for card in [first, personal_peer, second]:
+        assert (
+            api.post(
+                "/api/exchanges",
+                headers={**auth("member"), "Idempotency-Key": card["id"]},
+                json={"token": offer(api, "owner", card), "card_id": mine["id"]},
+            ).status_code
+            == 201
+        )
+
+    def search(keyword, who="member", **params):
+        response = api.get(book, headers=auth(who), params={"keyword": keyword, **params})
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    empty = {"items": [], "next_cursor": None, "total_count": 0, "favorite_count": 0}
+    assert (
+        api.put(
+            f"{book}/{first['id']}/favorite", headers=auth("member"), json={"is_favorite": True}
+        ).status_code
+        == 200
+    )
+    page = search("  wAlK  ", limit=1)
+    assert (page["total_count"], page["favorite_count"]) == (2, 1)
+    assert [i["peer_card"]["id"] for i in page["items"]] == [second["id"]]
+    assert page["next_cursor"]
+    next_page = search("wAlK", limit=1, cursor=page["next_cursor"])
+    assert [i["peer_card"]["id"] for i in next_page["items"]] == [first["id"]]
+    assert next_page["next_cursor"] is None
+    stars = search("walk", favorite_only=True)
+    assert (stars["total_count"], stars["favorite_count"]) == (2, 1)
+    assert [i["peer_card"]["id"] for i in stars["items"]] == [first["id"]]
+    for keyword in ("_", "%", "달빛"):
+        assert [i["peer_card"]["id"] for i in search(keyword)["items"]] == [first["id"]]
+    assert search("달빛", who="other") == empty
+    group_path = "/api/groups/" + first["group"]["id"]
+    assert api.patch(group_path, json={"name": "새벽 모임"}).status_code == 200
+    assert search("달빛") == empty
+    assert search("새벽")["favorite_count"] == 1
+    assert api.patch(group_path, json={"status": "closed"}).status_code == 200
+    assert search("새벽") == empty

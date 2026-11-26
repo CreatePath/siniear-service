@@ -14,10 +14,11 @@ from app.core.errors import API_ERRORS, DomainError
 from app.core.idempotency import remember, replay
 from app.core.pagination import paginate
 from app.core.schemas import Page
-from app.db.models import Senior
+from app.db.models import Group, Senior
 from app.db.models.exchange import Exchange, ExchangeOffer, Favorite
 from app.db.models.identity import MediaAsset
 from app.db.models.interview import Card
+from app.db.models.membership import Membership
 from app.modules.cards.exchange_schemas import (
     Accept,
     BookItem,
@@ -217,9 +218,12 @@ def book_entries(senior_id, keyword=""):
         query = (
             query.join(Card, Card.id == latest.c.peer_id)
             .join(Senior, Senior.id == Card.senior_id)
+            .outerjoin(Membership, Membership.id == Card.membership_id)
+            .outerjoin(Group, Group.id == Membership.group_id)
             .where(
                 or_(
                     name.icontains(keyword, autoescape=True),
+                    Group.name.icontains(keyword, autoescape=True),
                     and_(
                         any_(Card.visible_fields) == "experience",
                         Senior.experience.icontains(keyword, autoescape=True),
@@ -251,7 +255,13 @@ def received(session, senior_id, card_id):
 def book(
     actor: Actor,
     session: Database,
-    keyword: Annotated[str, Query(max_length=200)] = "",
+    keyword: Annotated[
+        str,
+        Query(
+            max_length=200,
+            description="명함 표시 이름, 소속 명함의 모임 이름, 공개된 경험 부분 검색",
+        ),
+    ] = "",
     favorite_only: bool = False,
     limit: Limit = 20,
     cursor: Cursor = None,
