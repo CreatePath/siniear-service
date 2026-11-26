@@ -9,10 +9,12 @@ Location = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1,
 Reason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
 Capacity = Annotated[int, Field(strict=True, ge=1, le=2147483647)]
 MeetingStatus = Literal["recruiting", "closed", "canceled", "completed"]
+ActivityCategory = Literal["walk", "hobby", "exercise"]
 
 
 class MeetingCreate(Input):
     title: Name
+    category: ActivityCategory | None = None
     description: Description = ""
     starts_at: AwareDatetime
     ends_at: AwareDatetime
@@ -34,6 +36,7 @@ class IndependentMeetingCreate(MeetingCreate):
 
 class MeetingPatch(Patch):
     title: Name | None = None
+    category: ActivityCategory | None = None
     description: Description | None = None
     starts_at: AwareDatetime | None = None
     ends_at: AwareDatetime | None = None
@@ -60,6 +63,7 @@ class MeetingResponse(BaseModel):
     owner_id: UUID
     region_code: str
     title: str
+    category: ActivityCategory | None = None
     description: str
     starts_at: AwareDatetime
     ends_at: AwareDatetime

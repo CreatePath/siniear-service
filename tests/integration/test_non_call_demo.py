@@ -60,7 +60,8 @@ def test_seed_preserves_edits_cancellation_and_deleted_comment(demo_engine):
         session.execute(
             text("DELETE FROM comments WHERE id=:id"), {"id": demo.demo_id("comment", "welcome")}
         )
-        first_time = session.get(Meeting, demo.demo_id("meeting", "walk")).starts_at
+        start_time = select(Meeting.starts_at).where(Meeting.id == demo.demo_id("meeting", "walk"))
+        first_time = session.scalar(start_time)
     with Session(demo_engine) as session, session.begin():
         assert demo.seed(session) is False
         assert (
@@ -77,7 +78,7 @@ def test_seed_preserves_edits_cancellation_and_deleted_comment(demo_engine):
             )
             is None
         )
-        assert session.get(Meeting, demo.demo_id("meeting", "walk")).starts_at == first_time
+        assert session.scalar(start_time) == first_time
         assert session.scalar(select(func.count()).select_from(User)) == 4
         assert session.scalar(select(func.count()).select_from(Post)) == 3
 
