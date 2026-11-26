@@ -1,6 +1,8 @@
+import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from scripts.seed_non_call_demo import seed
@@ -97,3 +99,158 @@ def test_upgrade_preserves_profiles_registrations_and_replays(schema_engine):
             inspect(connection).get_table_names()
         )
         command.check(config)
+
+
+def test_activity_backfill_preserves_selected_title_and_counts_only_period_activity(schema_engine):
+    with schema_engine.begin() as connection:
+        config = Config("alembic.ini")
+        config.attributes["connection"] = connection
+        command.upgrade(config, "d824e81c48c2")
+        with Session(connection) as session, session.begin():
+            seed(session)
+        command.upgrade(config, "aa2611000004")
+        member = connection.execute(
+            text("""
+            SELECT m.id, m.group_id, m.senior_id, c.id AS card_id FROM group_memberships m
+            JOIN cards c ON c.membership_id=m.id ORDER BY m.id LIMIT 1
+        """)
+        ).one()
+        params = dict(member._mapping)
+        # The demo may contain posts timestamped later than the test transaction start.
+        connection.execute(
+            text("""
+            UPDATE posts SET created_at=now()-interval '1 day'
+            WHERE group_id=:group_id AND author_id=:senior_id
+        """),
+            params,
+        )
+        connection.execute(
+            text("""
+            UPDATE group_memberships SET joined_at=now() WHERE id=:id
+        """),
+            params,
+        )
+        connection.execute(
+            text("""
+            INSERT INTO posts (id, group_id, author_id, title, content, created_at, deleted_at)
+            SELECT gen_random_uuid(), :group_id, :senior_id, 'fixture', 'fixture',
+                   now() + n * interval '1 second', now() + interval '1 hour'
+            FROM generate_series(-10,9) n
+        """),
+            params,
+        )
+        previous = connection.execute(
+            text("""
+            INSERT INTO membership_titles(id,membership_id,label,evidence_ref)
+            VALUES(gen_random_uuid(),:id,'이야기꾼','old') RETURNING id
+        """),
+            params,
+        ).scalar_one()
+        params["selected"] = previous
+        connection.execute(
+            text("""
+            UPDATE cards SET selected_title_id=:selected WHERE id=:card_id
+        """),
+            params,
+        )
+        connection.execute(
+            text("""
+            INSERT INTO card_exchanges(id,card_low_id,card_high_id)
+            SELECT gen_random_uuid(), least(id,:card_id), greatest(id,:card_id)
+            FROM cards WHERE id<>:card_id
+        """),
+            params,
+        )
+        params["meeting"] = connection.scalar(
+            text("""
+            INSERT INTO meetings(id,group_id,owner_id,region_code,title,description,starts_at,
+                                 ends_at,location,capacity,registration_closes_at,status)
+            VALUES(gen_random_uuid(),:group_id,:senior_id,'test','test','',now()+interval '1 day',
+                   now()+interval '2 days','test',3,now(),'closed') RETURNING id
+        """),
+            params,
+        )
+        params["registration"] = connection.scalar(
+            text("""
+            INSERT INTO meeting_registrations(id,meeting_id,senior_id,status,version)
+            VALUES(gen_random_uuid(),:meeting,:senior_id,'canceled',4) RETURNING id
+        """),
+            params,
+        )
+        connection.execute(
+            text("""
+            INSERT INTO registration_actions(registration_id,resulting_version,actor_senior_id,
+                                             action,created_at)
+            SELECT :registration,n,:senior_id,
+                   CASE WHEN n IN (1,3) THEN 'register' ELSE 'cancel' END,
+                   now()+n*interval '1 second' FROM generate_series(1,4) n
+        """),
+            params,
+        )
+        command.upgrade(config, "head")
+        assert connection.execute(
+            text("""
+            SELECT post_count,exchange_count FROM group_memberships WHERE id=:id
+        """),
+            params,
+        ).one() == (10, 1)
+        awards = dict(
+            connection.execute(
+                text("""
+            SELECT label,id FROM membership_titles WHERE membership_id=:id
+        """),
+                params,
+            ).all()
+        )
+        assert set(awards) == {"신규 회원", "이야기꾼", "새로운 이웃", "새로운 얼굴"}
+        assert awards["이야기꾼"] == previous
+        assert (
+            connection.scalar(text("SELECT selected_title_id FROM cards WHERE id=:card_id"), params)
+            == previous
+        )
+
+
+def test_title_rule_fk_validates_existing_grants_and_preserves_selection(api, db_engine):
+    from tests.integration.test_groups_meetings import create_group
+
+    create_group(api)
+    (period,) = api.get("/api/me/memberships").json()["items"]
+    titles = f"/api/me/memberships/{period['id']}/titles"
+    (grant,) = api.get(titles).json()["items"]
+    card = "/api/cards/" + period["card_id"]
+    assert (
+        api.patch(
+            card, headers={"If-Match": '"1"'}, json={"selected_title_id": grant["id"]}
+        ).status_code
+        == 200
+    )
+
+    with db_engine.begin() as conn:
+        config = Config("alembic.ini")
+        config.attributes["connection"] = conn
+        command.downgrade(config, "aa2611000006")
+        with conn.begin_nested() as previous_data:
+            conn.execute(text("UPDATE membership_titles SET label='미등록'"))
+            with pytest.raises(IntegrityError) as failed, conn.begin_nested():
+                command.upgrade(config, "aa2611000007")
+            assert failed.value.orig.sqlstate == "23503"
+            assert conn.scalar(text("SELECT label FROM membership_titles")) == "미등록"
+            previous_data.rollback()
+        command.upgrade(config, "aa2611000007")
+        for invalid in (
+            "UPDATE membership_titles SET label='미등록'",
+            "DELETE FROM activity_title_rules WHERE label='신규 회원'",
+        ):
+            with pytest.raises(IntegrityError) as failed, conn.begin_nested():
+                conn.execute(text(invalid))
+            assert failed.value.orig.sqlstate == "23503"
+        conn.execute(
+            text("UPDATE activity_title_rules SET label='새 회원' WHERE label='신규 회원'")
+        )
+
+    assert api.get(titles).json()["items"] == [{**grant, "label": "새 회원", "tier": "silver"}]
+    selected = api.get(card).json()
+    assert (selected["selected_title_id"], selected["selected_title_tier"]) == (
+        grant["id"],
+        "silver",
+    )

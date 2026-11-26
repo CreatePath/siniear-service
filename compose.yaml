@@ -60,5 +60,29 @@ services:
     logging:
       driver: local
 
+  title-push:
+    profiles: ["push"]
+    build:
+      context: .
+      target: runtime
+    command: ["python", "-m", "app.workers.title_push"]
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-siniear}
+      DB_USER: ${DB_USER:-siniear}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/fcm_credentials
+    secrets: [fcm_credentials]
+    depends_on:
+      db:
+        condition: service_healthy
+
+secrets:
+  fcm_credentials:
+    file: ${FCM_CREDENTIALS_FILE:-../.local/fcm-credentials.json}
+
 volumes:
   postgres-data:

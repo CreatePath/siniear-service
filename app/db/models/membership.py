@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -10,9 +11,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    select,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.db.base import Base
 
@@ -36,6 +38,8 @@ class Membership(Base):
     senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    post_count: Mapped[int] = mapped_column(server_default="0")
+    exchange_count: Mapped[int] = mapped_column(server_default="0")
 
 
 class JoinRequest(Base):
@@ -78,6 +82,23 @@ class JoinRequest(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+TitleTier = Literal["silver", "gold", "diamond"]
+
+
+class ActivityTitleRule(Base):
+    __tablename__ = "activity_title_rules"
+    __table_args__ = (
+        UniqueConstraint("activity", "threshold"),
+        CheckConstraint("tier IN ('silver','gold','diamond')", name="tier"),
+        CheckConstraint("activity IN ('join','registration','post','exchange')", name="activity"),
+        CheckConstraint("threshold > 0", name="threshold"),
+    )
+    label: Mapped[str] = mapped_column(Text, primary_key=True)
+    tier: Mapped[TitleTier] = mapped_column(Text)
+    activity: Mapped[str] = mapped_column(Text)
+    threshold: Mapped[int]
+
+
 class MembershipTitle(Base):
     __tablename__ = "membership_titles"
     __table_args__ = (
@@ -86,5 +107,13 @@ class MembershipTitle(Base):
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     membership_id: Mapped[UUID] = mapped_column(ForeignKey("group_memberships.id"))
-    label: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = mapped_column(
+        ForeignKey("activity_title_rules.label", onupdate="CASCADE", ondelete="RESTRICT")
+    )
     evidence_ref: Mapped[str] = mapped_column(Text)
+    tier: Mapped[TitleTier] = column_property(
+        select(ActivityTitleRule.tier)
+        .where(ActivityTitleRule.label == label)
+        .correlate_except(ActivityTitleRule)
+        .scalar_subquery()
+    )

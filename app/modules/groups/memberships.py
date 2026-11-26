@@ -14,7 +14,7 @@ from app.core.schemas import Input, Page
 from app.db.models import Group, Senior, User
 from app.db.models.identity import MediaAsset
 from app.db.models.interview import Card
-from app.db.models.membership import JoinRequest, Membership, MembershipTitle
+from app.db.models.membership import JoinRequest, Membership, MembershipTitle, TitleTier
 from app.modules.auth.dependencies import Member
 from app.modules.groups.repository import (
     active_memberships,
@@ -56,6 +56,7 @@ class MembershipView(BaseModel):
 class Title(BaseModel):
     id: UUID
     label: str
+    tier: TitleTier
 
 
 class Titles(BaseModel):
@@ -208,12 +209,12 @@ def titles(membership_id: UUID, actor: Actor, session: Database) -> Titles:
             active_memberships(actor.senior_id).where(Membership.id == membership_id)
         ):
             raise DomainError(404, "MEMBERSHIP_NOT_FOUND", "소속을 찾을 수 없습니다.")
-        rows = session.scalars(
-            select(MembershipTitle)
+        rows = session.execute(
+            select(MembershipTitle.id, MembershipTitle.label, MembershipTitle.tier)
             .where(MembershipTitle.membership_id == membership_id)
             .order_by(MembershipTitle.label, MembershipTitle.id)
         )
-        return Titles(items=[Title(id=t.id, label=t.label) for t in rows])
+        return Titles(items=[Title(id=t.id, label=t.label, tier=t.tier) for t in rows])
 
 
 class BadgeCreated(BaseModel):
