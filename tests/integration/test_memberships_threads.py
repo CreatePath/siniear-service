@@ -58,6 +58,7 @@ def test_review_membership_title_and_thread_access(api, db_engine):
         headers={**member, "If-Match": '"1"'},
         json={"selected_title_id": award_id, "visible_fields": ["title"]},
     )
+    assert edit.json()["selected_title_tier"] is None
     assert edit.json()["fields"] == {"title": "합성 칭호"}
     root = api.post(comments, json={"content": "원댓글"}, headers=key).json()
     replies = f"/api/comments/{root['id']}/replies"

@@ -14,7 +14,7 @@ from app.core.schemas import Input, Page
 from app.db.models import Group, Senior, User
 from app.db.models.identity import MediaAsset
 from app.db.models.interview import Card
-from app.db.models.membership import ActivityTitleRule, JoinRequest, Membership, MembershipTitle
+from app.db.models.membership import JoinRequest, Membership, MembershipTitle, TitleTier
 from app.modules.auth.dependencies import Member
 from app.modules.groups.repository import (
     active_memberships,
@@ -56,7 +56,7 @@ class MembershipView(BaseModel):
 class Title(BaseModel):
     id: UUID
     label: str
-    tier: Literal["silver", "gold", "diamond"] | None
+    tier: TitleTier | None
 
 
 class Titles(BaseModel):
@@ -210,8 +210,7 @@ def titles(membership_id: UUID, actor: Actor, session: Database) -> Titles:
         ):
             raise DomainError(404, "MEMBERSHIP_NOT_FOUND", "소속을 찾을 수 없습니다.")
         rows = session.execute(
-            select(MembershipTitle.id, MembershipTitle.label, ActivityTitleRule.tier)
-            .outerjoin(ActivityTitleRule, MembershipTitle.label == ActivityTitleRule.label)
+            select(MembershipTitle.id, MembershipTitle.label, MembershipTitle.tier)
             .where(MembershipTitle.membership_id == membership_id)
             .order_by(MembershipTitle.label, MembershipTitle.id)
         )

@@ -89,6 +89,8 @@ def render_card(session, card, *, owner=False, preview_offer=None):
     if owner:
         values.update(version=card.version, visible_fields=card.visible_fields)
     if card.membership_id:
+        if "title" in values["fields"] and title.tier is not None:
+            values["fields"]["title_tier"] = title.tier
         membership = session.get(Membership, card.membership_id)
         group = session.get(Group, membership.group_id)
         values.update(
@@ -107,6 +109,7 @@ def render_card(session, card, *, owner=False, preview_offer=None):
                 role=card.role,
                 group_intro=card.group_intro,
                 selected_title_id=card.selected_title_id,
+                selected_title_tier=title.tier if title else None,
             )
         return PublicGroupCard(**values)
     return CardView(**values) if owner else PublicCard(**values)

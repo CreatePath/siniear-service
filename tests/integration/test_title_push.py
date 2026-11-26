@@ -189,6 +189,7 @@ def test_worker_submits_os_notification_over_http(api, db_engine, monkeypatch):
     message = received[0]["message"]
     assert message["token"] == "wire-test"
     assert message["data"]["type"] == "title_awarded"
+    assert (message["data"]["label"], message["data"]["tier"]) == ("신규 회원", "silver")
     assert "신규 회원" in message["notification"]["body"]
     assert not send_one(db_engine, sender)
 

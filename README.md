@@ -29,7 +29,7 @@ docker compose ps
 
 프로필 생성·수정에는 `nickname`을 사용한다. `name`은 인증된 실명의 조회 전용 필드다. 프로필 삭제는 `DELETE /api/users/me`로 계정 탈퇴와 함께 처리한다. `POST /api/me/cards`로 개인 명함을 직접 만들고 `DELETE /api/cards/{card_id}`에 현재 버전의 `If-Match`를 보내 삭제할 수 있다. 소속 명함은 개설·가입 승인 시 발급되고 모임 탈퇴·종료 시 효력을 잃는다.
 
-모임장 계정과 신청자 계정으로 가입 신청 → 승인 → 내 소속 목록 → 소속 명함을 순서대로 호출한다. 칭호 목록은 해당 가입 기간에 획득한 항목의 id, label, tier를 반환한다. 모임 개설·가입 승인, 소속 일정 신청(서로 다른 일정 1·10·100개), 게시글 작성(10·100개), 소속 명함 교환(서로 다른 카드 쌍 1·10·100개)으로 칭호를 얻는다. 취소·재신청, 글 수정·삭제, 교환 재시도는 누적 달성 횟수를 바꾸지 않는다. 역할·소개·대표 칭호는 명함 PATCH에서 편집한다.
+모임장 계정과 신청자 계정으로 가입 신청 → 승인 → 내 소속 목록 → 소속 명함을 순서대로 호출한다. 칭호 목록은 해당 가입 기간에 획득한 항목의 id, label, tier를 반환한다. 모임 개설·가입 승인, 소속 일정 신청(서로 다른 일정 1·10·100개), 게시글 작성(10·100개), 소속 명함 교환(서로 다른 카드 쌍 1·10·100개)으로 칭호를 얻는다. 취소·재신청, 글 수정·삭제, 교환 재시도는 누적 달성 횟수를 바꾸지 않는다. 역할·소개·대표 칭호는 명함 PATCH에서 편집한다. 명함에 칭호를 공개하면 `fields.title`과 `fields.title_tier`가 함께 전달된다. 본인 편집 응답에서는 `selected_title_tier`로 선택한 티어를 읽을 수 있다.
 
 교환 제안의 개발 기본 유효시간은 10분이다. 수신자가 미리보기 후 자신의 명함으로 수락하면 양측 명함첩에 반영된다. 미리보기의 사진 URL은 Bearer 인증과 `X-Exchange-Token` 헤더가 필요하다. 교환 후 사진은 Bearer 인증과 현재 교환·공개 상태로 조회한다.
 
@@ -41,7 +41,7 @@ docker compose ps
 
 1. **앱 등록.** Android·iOS 앱을 같은 Firebase 프로젝트에 연결한다. iOS는 Push Notifications capability와 Firebase의 APNs 자격 증명을 설정한다. 앱 첫 실행 시 OS 알림 권한을 요청한다. 로그인 후 FCM 등록 토큰을 받거나 토큰이 갱신되면 현재 세션의 Bearer 인증으로 `PUT /api/me/push-token`에 `{"token": "<FCM 등록 토큰>"}`을 보낸다. 알림을 해제하면 `DELETE /api/me/push-token`을 호출한다. 두 요청 모두 성공하면 204다. 세션 로그아웃·탈퇴 시 서버가 등록과 남은 발송을 함께 정리한다.
 2. **서버 설정.** Firebase Cloud Messaging API를 활성화하고 해당 프로젝트에 발송 권한이 있는 서비스 계정을 준비한다. DB 마이그레이션 적용 후 로컬 Compose에 `FCM_PROJECT_ID`와 저장소 밖 인증 파일의 절대 경로 `FCM_CREDENTIALS_FILE`을 설정하고 `docker compose --profile push up -d --build title-push`로 작업자를 실행한다. 클라우드에서는 같은 런타임 이미지에 ADC와 `FCM_PROJECT_ID`를 제공해 `python -m app.workers.title_push`를 상시 실행한다.
-3. **앱에서 열기.** OS가 백그라운드 알림을 표시한다. Flutter는 종료 상태에서 누른 알림을 `getInitialMessage()`로, 백그라운드에서 누른 알림을 `onMessageOpenedApp`으로 처리한다. `data.type=title_awarded`이면 로그인 후 `data.membership_id`의 보유 목록을 조회해 `data.title_id`를 보여준다. Android에서 설정으로 앱을 강제 중지한 경우 다시 실행해야 수신할 수 있다.
+3. **앱에서 열기.** OS가 백그라운드 알림을 표시한다. Flutter는 종료 상태에서 누른 알림을 `getInitialMessage()`로, 백그라운드에서 누른 알림을 `onMessageOpenedApp`으로 처리한다. `data.label`과 `data.tier`는 획득한 활동 칭호의 이름과 티어다. `data.type=title_awarded`이면 로그인 후 `data.membership_id`의 보유 목록을 조회해 `data.title_id`를 보여준다. Android에서 설정으로 앱을 강제 중지한 경우 다시 실행해야 수신할 수 있다.
 
 FCM 응답이 유실되면 같은 칭호 ID로 재시도한다. Android 알림 태그와 APNs collapse ID도 이 ID를 사용한다. FCM의 요청 수락과 기기의 실제 표시 여부는 구분한다. [FCM HTTP v1](https://firebase.google.com/docs/cloud-messaging/send/v1-api) · [Flutter 수신과 알림 탭](https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages)
 

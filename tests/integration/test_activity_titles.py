@@ -100,13 +100,28 @@ def test_exchange_threshold_both_cards_and_replay(api, db_engine, prior, label, 
         == 200
     )
     peer_card = api.get(card_path, headers=auth("member")).json()
-    assert peer_card["fields"] == {"title": label}
-    assert {"tier", "selected_title_id", "evidence_ref"}.isdisjoint(peer_card)
+    expected_fields = {"title": label, "title_tier": tier}
+    assert peer_card["fields"] == expected_fields
+    preview = api.post(
+        "/api/exchange-offers/preview",
+        headers=auth("member"),
+        json={"token": offer(api, "owner", peer)},
+    ).json()
+    assert preview["card"]["fields"] == expected_fields
+    book = api.get("/api/me/card-book", headers=auth("member")).json()["items"]
+    assert book[0]["peer_card"]["fields"] == expected_fields
+    assert {"tier", "selected_title_tier", "selected_title_id", "evidence_ref"}.isdisjoint(
+        peer_card
+    )
     assert (
         api.patch(card_path, headers={"If-Match": '"2"'}, json={"visible_fields": []}).status_code
         == 200
     )
     assert api.get(card_path, headers=auth("member")).json()["fields"] == {}
+    private = api.get(card_path).json()
+    assert private["selected_title_tier"] == tier and private["fields"] == {}
+    cleared = api.patch(card_path, headers={"If-Match": '"3"'}, json={"selected_title_id": None})
+    assert cleared.json()["selected_title_tier"] is None
     for m, name in ((member, "member"), (owner, "owner")):
         assert titles(api, m, name)[label] == tier
         with Session(db_engine) as session:

@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.schemas import Input, Name
+from app.db.models.membership import TitleTier
 from app.modules.seniors.profile import Profile, ProfileEdits, ShortText
 
 Template = Literal["default", "classic", "fresh_start"]
@@ -93,6 +94,7 @@ class GroupCardView(PublicGroupCard):
     visible_fields: GroupFields
     membership_id: UUID
     selected_title_id: UUID | None
+    selected_title_tier: TitleTier | None
     role: str | None
     group_intro: str | None
 

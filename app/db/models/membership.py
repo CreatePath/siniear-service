@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -10,9 +11,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    select,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.db.base import Base
 
@@ -80,6 +82,9 @@ class JoinRequest(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+TitleTier = Literal["silver", "gold", "diamond"]
+
+
 class ActivityTitleRule(Base):
     __tablename__ = "activity_title_rules"
     __table_args__ = (
@@ -89,7 +94,7 @@ class ActivityTitleRule(Base):
         CheckConstraint("threshold > 0", name="threshold"),
     )
     label: Mapped[str] = mapped_column(Text, primary_key=True)
-    tier: Mapped[str] = mapped_column(Text)
+    tier: Mapped[TitleTier] = mapped_column(Text)
     activity: Mapped[str] = mapped_column(Text)
     threshold: Mapped[int]
 
@@ -104,3 +109,9 @@ class MembershipTitle(Base):
     membership_id: Mapped[UUID] = mapped_column(ForeignKey("group_memberships.id"))
     label: Mapped[str] = mapped_column(Text)
     evidence_ref: Mapped[str] = mapped_column(Text)
+    tier: Mapped[TitleTier | None] = column_property(
+        select(ActivityTitleRule.tier)
+        .where(ActivityTitleRule.label == label)
+        .correlate_except(ActivityTitleRule)
+        .scalar_subquery()
+    )
