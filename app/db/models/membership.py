@@ -36,6 +36,8 @@ class Membership(Base):
     senior_id: Mapped[UUID] = mapped_column(ForeignKey("seniors.id"))
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    post_count: Mapped[int] = mapped_column(server_default="0")
+    exchange_count: Mapped[int] = mapped_column(server_default="0")
 
 
 class JoinRequest(Base):
@@ -76,6 +78,20 @@ class JoinRequest(Base):
     membership_id: Mapped[UUID | None] = mapped_column(unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ActivityTitleRule(Base):
+    __tablename__ = "activity_title_rules"
+    __table_args__ = (
+        UniqueConstraint("activity", "threshold"),
+        CheckConstraint("tier IN ('silver','gold','diamond')", name="tier"),
+        CheckConstraint("activity IN ('join','registration','post','exchange')", name="activity"),
+        CheckConstraint("threshold > 0", name="threshold"),
+    )
+    label: Mapped[str] = mapped_column(Text, primary_key=True)
+    tier: Mapped[str] = mapped_column(Text)
+    activity: Mapped[str] = mapped_column(Text)
+    threshold: Mapped[int]
 
 
 class MembershipTitle(Base):

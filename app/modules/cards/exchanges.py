@@ -31,6 +31,7 @@ from app.modules.cards.exchange_schemas import (
     Star,
 )
 from app.modules.cards.service import active_card, lock_cards, missing, owned_card, render_card
+from app.modules.groups.activity_titles import record_exchange
 
 router = APIRouter(tags=["card-exchanges"], responses=API_ERRORS)
 OFFER_TTL = timedelta(minutes=10)
@@ -165,6 +166,10 @@ def accept(
             status = 201
         offer.consumed_at = datetime.now(UTC)
         session.flush()
+        if status == 201:
+            for card in (mine, peer):
+                if card.membership_id:
+                    record_exchange(session, card.membership_id, exchange.id)
         remember(session, *args, status, {}, resource_id=exchange.id)
         response.status_code = status
         return exchange_view(

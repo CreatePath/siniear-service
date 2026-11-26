@@ -13,6 +13,7 @@ from app.modules.community.repository import (
     get_post,
     post_responses,
 )
+from app.modules.groups.activity_titles import record_post
 from app.modules.groups.repository import get_group
 from app.modules.meetings.repository import get_meeting, require_meeting_access
 
@@ -50,10 +51,19 @@ def read_post(session, post_id):
 
 def create_post(session, principal, group_id, data):
     with session.begin():
-        get_group(session, group_id)
-        post = Post(group_id=group_id, author_id=principal.senior_id, **data.model_dump())
+        # Establish the writing period in the same order as approvals and departures.
+        get_group(session, group_id, lock=True)
+        at = datetime.now(UTC)
+        post = Post(
+            group_id=group_id,
+            author_id=principal.senior_id,
+            created_at=at,
+            updated_at=at,
+            **data.model_dump(),
+        )
         session.add(post)
         session.flush()
+        record_post(session, post)
         return post_responses(session, [post])[0]
 
 

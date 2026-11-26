@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.core.errors import DomainError
 from app.core.idempotency import lock_key
 from app.db.models import IdempotencyRecord, Registration
+from app.modules.groups.activity_titles import record_registration
 from app.modules.meetings.registration_repository import (
     participant_count,
     record_action,
@@ -61,6 +62,8 @@ def register(session, principal, meeting_id, key):
                 registration.version += 1
             session.flush()
             record_action(session, registration, principal.senior_id, "register")
+            if group:
+                record_registration(session, group.id, registration)
         body = registration_response(session, registration).model_dump(mode="json")
         session.add(
             IdempotencyRecord(

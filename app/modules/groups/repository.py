@@ -4,6 +4,7 @@ from app.core.errors import DomainError
 from app.db.models import Group
 from app.db.models.interview import Card
 from app.db.models.membership import JoinRequest, Membership
+from app.modules.groups.activity_titles import award_titles
 from app.modules.groups.schemas import GroupResponse
 
 
@@ -59,6 +60,7 @@ def issue_membership(session, group_id, senior_id, at):
             senior_id=senior_id, membership_id=member.id, template_key="default", visible_fields=[]
         )
     )
+    award_titles(session, member.id, "join", 1, member.id)
     return member
 
 

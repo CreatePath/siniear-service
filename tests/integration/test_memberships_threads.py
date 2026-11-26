@@ -39,7 +39,9 @@ def test_review_membership_title_and_thread_access(api, db_engine):
     (membership,) = api.get("/api/me/memberships", headers=member).json()["items"]
     card = "/api/cards/" + membership["card_id"]
     titles = f"/api/me/memberships/{membership['id']}/titles"
-    assert api.get(titles, headers=member).json() == {"items": []}
+    (welcome,) = api.get(titles, headers=member).json()["items"]
+    assert (welcome["label"], welcome["tier"]) == ("신규 회원", "silver")
+    assert api.get(titles).status_code == 404
     with Session(db_engine) as session, session.begin():
         award = MembershipTitle(
             membership_id=UUID(membership["id"]), label="합성 칭호", evidence_ref="synthetic"
@@ -48,7 +50,8 @@ def test_review_membership_title_and_thread_access(api, db_engine):
         session.flush()
         award_id = str(award.id)
     assert api.get(titles, headers=member).json()["items"] == [
-        {"id": award_id, "label": "합성 칭호"}
+        welcome,
+        {"id": award_id, "label": "합성 칭호", "tier": None},
     ]
     edit = api.patch(
         card,
