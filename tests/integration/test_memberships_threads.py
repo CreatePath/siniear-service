@@ -6,13 +6,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Comment
-from app.db.models.membership import JoinRequest, Membership, MembershipTitle
+from app.db.models.membership import JoinRequest, Membership
 from tests.integration.conftest import auth, join
 from tests.integration.test_community import create_comment, create_post
 from tests.integration.test_groups_meetings import create_group, meeting_data
 
 
-def test_review_membership_title_and_thread_access(api, db_engine):
+def test_review_membership_title_and_thread_access(api):
     group = create_group(api)
     group_path = f"/api/groups/{group['id']}"
     body = meeting_data()
@@ -42,24 +42,14 @@ def test_review_membership_title_and_thread_access(api, db_engine):
     (welcome,) = api.get(titles, headers=member).json()["items"]
     assert (welcome["label"], welcome["tier"]) == ("신규 회원", "silver")
     assert api.get(titles).status_code == 404
-    with Session(db_engine) as session, session.begin():
-        award = MembershipTitle(
-            membership_id=UUID(membership["id"]), label="합성 칭호", evidence_ref="synthetic"
-        )
-        session.add(award)
-        session.flush()
-        award_id = str(award.id)
-    assert api.get(titles, headers=member).json()["items"] == [
-        welcome,
-        {"id": award_id, "label": "합성 칭호", "tier": None},
-    ]
+    award_id = welcome["id"]
     edit = api.patch(
         card,
         headers={**member, "If-Match": '"1"'},
         json={"selected_title_id": award_id, "visible_fields": ["title"]},
     )
-    assert edit.json()["selected_title_tier"] is None
-    assert edit.json()["fields"] == {"title": "합성 칭호"}
+    assert edit.json()["selected_title_tier"] == "silver"
+    assert edit.json()["fields"] == {"title": "신규 회원", "title_tier": "silver"}
     root = api.post(comments, json={"content": "원댓글"}, headers=key).json()
     replies = f"/api/comments/{root['id']}/replies"
     reply = api.post(replies, json={"content": "답글"}, headers={"Idempotency-Key": "reply"}).json()

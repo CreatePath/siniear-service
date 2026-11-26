@@ -107,9 +107,11 @@ class MembershipTitle(Base):
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     membership_id: Mapped[UUID] = mapped_column(ForeignKey("group_memberships.id"))
-    label: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = mapped_column(
+        ForeignKey("activity_title_rules.label", onupdate="CASCADE", ondelete="RESTRICT")
+    )
     evidence_ref: Mapped[str] = mapped_column(Text)
-    tier: Mapped[TitleTier | None] = column_property(
+    tier: Mapped[TitleTier] = column_property(
         select(ActivityTitleRule.tier)
         .where(ActivityTitleRule.label == label)
         .correlate_except(ActivityTitleRule)

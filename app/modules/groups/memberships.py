@@ -56,7 +56,7 @@ class MembershipView(BaseModel):
 class Title(BaseModel):
     id: UUID
     label: str
-    tier: TitleTier | None
+    tier: TitleTier
 
 
 class Titles(BaseModel):

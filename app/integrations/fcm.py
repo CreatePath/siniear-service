@@ -53,13 +53,12 @@ class FcmSender:
                 "type": "title_awarded",
                 "title_id": award_id,
                 "label": title.label,
+                "tier": title.tier,
                 "membership_id": str(title.membership_id),
             },
             "android": {"priority": "high", "notification": {"tag": award_id}},
             "apns": {"headers": {"apns-collapse-id": award_id, "apns-push-type": "alert"}},
         }
-        if title.tier is not None:
-            message["data"]["tier"] = title.tier
         try:
             response = self.http.post(self.url, json={"message": message}, timeout=10)
         except (requests.RequestException, GoogleAuthError):

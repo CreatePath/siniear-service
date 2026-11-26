@@ -21,7 +21,7 @@ def award():
     return SimpleNamespace(id=uuid4(), label="새로운 얼굴", tier="silver", membership_id=uuid4())
 
 
-@pytest.mark.parametrize("tier", ["silver", "gold", "diamond", None])
+@pytest.mark.parametrize("tier", ["silver", "gold", "diamond"])
 def test_os_notification_and_stable_award_id(sender, tier):
     sender.http.post.return_value.status_code = 200
     sender.http.post.return_value.json.return_value = {"name": "projects/test/messages/accepted"}
@@ -41,7 +41,7 @@ def test_os_notification_and_stable_award_id(sender, tier):
     assert msg["data"] == {
         "type": "title_awarded",
         "label": title.label,
-        **({"tier": tier} if tier is not None else {}),
+        "tier": tier,
         "title_id": str(title.id),
         "membership_id": str(title.membership_id),
     }

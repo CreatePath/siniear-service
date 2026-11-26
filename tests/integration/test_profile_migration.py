@@ -1,6 +1,8 @@
+import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from scripts.seed_non_call_demo import seed
@@ -206,3 +208,49 @@ def test_activity_backfill_preserves_selected_title_and_counts_only_period_activ
             connection.scalar(text("SELECT selected_title_id FROM cards WHERE id=:card_id"), params)
             == previous
         )
+
+
+def test_title_rule_fk_validates_existing_grants_and_preserves_selection(api, db_engine):
+    from tests.integration.test_groups_meetings import create_group
+
+    create_group(api)
+    (period,) = api.get("/api/me/memberships").json()["items"]
+    titles = f"/api/me/memberships/{period['id']}/titles"
+    (grant,) = api.get(titles).json()["items"]
+    card = "/api/cards/" + period["card_id"]
+    assert (
+        api.patch(
+            card, headers={"If-Match": '"1"'}, json={"selected_title_id": grant["id"]}
+        ).status_code
+        == 200
+    )
+
+    with db_engine.begin() as conn:
+        config = Config("alembic.ini")
+        config.attributes["connection"] = conn
+        command.downgrade(config, "aa2611000006")
+        with conn.begin_nested() as previous_data:
+            conn.execute(text("UPDATE membership_titles SET label='미등록'"))
+            with pytest.raises(IntegrityError) as failed, conn.begin_nested():
+                command.upgrade(config, "aa2611000007")
+            assert failed.value.orig.sqlstate == "23503"
+            assert conn.scalar(text("SELECT label FROM membership_titles")) == "미등록"
+            previous_data.rollback()
+        command.upgrade(config, "aa2611000007")
+        for invalid in (
+            "UPDATE membership_titles SET label='미등록'",
+            "DELETE FROM activity_title_rules WHERE label='신규 회원'",
+        ):
+            with pytest.raises(IntegrityError) as failed, conn.begin_nested():
+                conn.execute(text(invalid))
+            assert failed.value.orig.sqlstate == "23503"
+        conn.execute(
+            text("UPDATE activity_title_rules SET label='새 회원' WHERE label='신규 회원'")
+        )
+
+    assert api.get(titles).json()["items"] == [{**grant, "label": "새 회원", "tier": "silver"}]
+    selected = api.get(card).json()
+    assert (selected["selected_title_id"], selected["selected_title_tier"]) == (
+        grant["id"],
+        "silver",
+    )
