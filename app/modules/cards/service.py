@@ -12,6 +12,7 @@ from app.modules.cards.schemas import (
     PublicCard,
     PublicGroupCard,
 )
+from app.modules.community.encouragements import tag_totals
 
 
 def active_card(card=Card):
@@ -95,6 +96,7 @@ def render_card(session, card, *, owner=False, preview_offer=None):
         group = session.get(Group, membership.group_id)
         values.update(
             kind="group",
+            top_encouragement_tags=[tag for tag, _ in tag_totals(session, group.id, senior.id)[:3]],
             group=GroupInfo(
                 id=group.id,
                 name=group.name,

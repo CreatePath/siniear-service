@@ -251,9 +251,12 @@ def test_title_rule_fk_validates_existing_grants_and_preserves_selection(api, db
         conn.execute(
             text("UPDATE activity_title_rules SET label='새 회원' WHERE label='신규 회원'")
         )
+        # Run the current card API against its schema after testing the historical FK.
+        command.upgrade(config, "head")
 
     assert api.get(titles).json()["items"] == [{**grant, "label": "새 회원", "tier": "silver"}]
     selected = api.get(card).json()
+    assert selected["top_encouragement_tags"] == []
     assert (selected["selected_title_id"], selected["selected_title_tier"]) == (
         grant["id"],
         "silver",

@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.schemas import Input, Name
+from app.db.models.encouragement import Tag
 from app.db.models.membership import TitleTier
 from app.modules.seniors.profile import Profile, ProfileEdits, ShortText
 
@@ -82,6 +83,10 @@ class GroupInfo(BaseModel):
 class PublicGroupCard(PublicCard):
     kind: Literal["group"] = "group"
     group: GroupInfo
+    top_encouragement_tags: list[Tag] = Field(
+        max_length=3,
+        description="이 동호회에서 받은 횟수순. 동률이면 최근에 받은 태그부터 표시한다.",
+    )
 
 
 class CardView(PublicCard):
