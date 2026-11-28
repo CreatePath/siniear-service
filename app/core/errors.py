@@ -8,6 +8,11 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 ErrorCode = Literal[
+    "ENCOURAGEMENT_NOT_FOUND",
+    "ENCOURAGEMENT_FORBIDDEN",
+    "ENCOURAGEMENT_WINDOW_CLOSED",
+    "ENCOURAGEMENT_CHANGED",
+    "ENCOURAGEMENT_EXISTS",
     "AUTH_REQUIRED",
     "PROFILE_REQUIRED",
     "PROFILE_EXISTS",

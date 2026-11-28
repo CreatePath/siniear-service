@@ -5,6 +5,7 @@ from app.modules.auth.push import router as push_router
 from app.modules.auth.router import router as auth_router
 from app.modules.cards.exchanges import router as exchanges_router
 from app.modules.cards.router import router as cards_router
+from app.modules.community.encouragement_router import router as encouragement_router
 from app.modules.community.router import router as community_router
 from app.modules.groups.memberships import router as memberships_router
 from app.modules.groups.router import router as groups_router
@@ -30,3 +31,4 @@ router.include_router(memberships_router)
 router.include_router(meetings_router)
 router.include_router(meeting_queries_router)
 router.include_router(community_router)
+router.include_router(encouragement_router)
